@@ -23,19 +23,42 @@ def db():
 def init_db():
     with db() as con:
         con.execute("""CREATE TABLE IF NOT EXISTS admins (
-            id INTEGER PRIMARY KEY, username TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL)""")
+            id INTEGER PRIMARY KEY,
+            username TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL
+        )""")
         con.execute("""CREATE TABLE IF NOT EXISTS certificates (
-            id INTEGER PRIMARY KEY, cert_no TEXT UNIQUE NOT NULL, token TEXT UNIQUE NOT NULL,
-            recipient TEXT NOT NULL, title TEXT NOT NULL, organization TEXT NOT NULL,
-            issue_date TEXT NOT NULL, expiry_date TEXT, signatory TEXT, status TEXT NOT NULL DEFAULT 'VALID',
-            created_at TEXT NOT NULL)""")
+            id INTEGER PRIMARY KEY,
+            cert_no TEXT UNIQUE NOT NULL,
+            token TEXT UNIQUE NOT NULL,
+            recipient TEXT NOT NULL,
+            title TEXT NOT NULL,
+            organization TEXT NOT NULL,
+            issue_date TEXT NOT NULL,
+            expiry_date TEXT,
+            signatory TEXT,
+            status TEXT NOT NULL DEFAULT 'VALID',
+            created_at TEXT NOT NULL
+        )""")
+
         username = os.environ.get("ADMIN_USERNAME", "admin")
         password = os.environ.get("ADMIN_PASSWORD")
-        if password and not con.execute("SELECT id FROM admins WHERE username=?", (username,)).fetchone():
-            con.execute("INSERT INTO admins(username,password_hash) VALUES(?,?)",
-                        (username, generate_password_hash(password)))
 
-def login_required(fn):
+        if password:
+            admin = con.execute(
+                "SELECT id FROM admins WHERE username=?", (username,)
+            ).fetchone()
+
+            if admin:
+                con.execute(
+                    "UPDATE admins SET password_hash=? WHERE username=?",
+                    (generate_password_hash(password), username)
+                )
+            else:
+                con.execute(
+                    "INSERT INTO admins(username,password_hash) VALUES(?,?)",
+                    (username, generate_password_hash(password))
+                )
     @wraps(fn)
     def wrapped(*args, **kwargs):
         if not session.get("admin_id"):
