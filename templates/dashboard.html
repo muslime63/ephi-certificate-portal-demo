@@ -1,0 +1,176 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EPHI Admin Dashboard</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f1f5f9;
+            margin: 0;
+            padding: 20px;
+            color: #1e293b;
+        }
+        .container {
+            max-width: 1000px;
+            margin: auto;
+        }
+        header {
+            background: #123b59;
+            color: white;
+            padding: 22px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        .stats {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            flex: 1;
+            min-width: 130px;
+            box-shadow: 0 2px 6px #0001;
+        }
+        .card h2 {
+            color: #123b59;
+            margin-bottom: 5px;
+        }
+        .actions {
+            margin-bottom: 20px;
+        }
+        a, button {
+            display: inline-block;
+            background: #176b50;
+            color: white;
+            padding: 11px 16px;
+            border: none;
+            border-radius: 6px;
+            text-decoration: none;
+            cursor: pointer;
+            margin: 4px;
+        }
+        .logout {
+            background: #b42318;
+        }
+        input {
+            padding: 11px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            max-width: 250px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        th, td {
+            padding: 12px;
+            border-bottom: 1px solid #ddd;
+            text-align: left;
+        }
+        th {
+            background: #123b59;
+            color: white;
+        }
+        .valid { color: green; font-weight: bold; }
+        .revoked { color: red; font-weight: bold; }
+        .empty {
+            background: white;
+            padding: 25px;
+            text-align: center;
+        }
+        @media(max-width:600px) {
+            table { font-size: 12px; }
+            th, td { padding: 7px; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+
+<header>
+    <h1>EPHI Certificate Portal</h1>
+    <p>Administration Dashboard</p>
+    <p>Welcome, {{ session.get('username', 'Admin') }}</p>
+</header>
+
+<div class="stats">
+    <div class="card">
+        <p>Total Certificates</p>
+        <h2>{{ total }}</h2>
+    </div>
+    <div class="card">
+        <p>Valid Certificates</p>
+        <h2>{{ valid }}</h2>
+    </div>
+</div>
+
+<div class="actions">
+    <a href="{{ url_for('issue') }}">+ Issue New Certificate</a>
+
+    <form method="GET" action="{{ url_for('dashboard') }}"
+          style="display:inline-block;">
+        <input type="text" name="q" placeholder="Search name or certificate number"
+               value="{{ q }}">
+        <button type="submit">Search</button>
+    </form>
+
+    <form method="POST" action="{{ url_for('logout') }}"
+          style="display:inline-block;">
+        <button class="logout" type="submit">Logout</button>
+    </form>
+</div>
+
+<h2>Certificate Records</h2>
+
+{% if certificates %}
+<table>
+    <thead>
+        <tr>
+            <th>Certificate No.</th>
+            <th>Recipient</th>
+            <th>Certificate Title</th>
+            <th>Issue Date</th>
+            <th>Status</th>
+            <th>Action</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for cert in certificates %}
+        <tr>
+            <td>{{ cert['cert_no'] }}</td>
+            <td>{{ cert['recipient'] }}</td>
+            <td>{{ cert['title'] }}</td>
+            <td>{{ cert['issue_date'] }}</td>
+            <td class="{{ 'valid' if cert['status'] == 'VALID' else 'revoked' }}">
+                {{ cert['status'] }}
+            </td>
+            <td>
+                <a href="{{ url_for('certificate_detail', token=cert['token']) }}">
+                    View
+                </a>
+            </td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<div class="empty">
+    <h3>No certificates found</h3>
+    <p>Issue your first certificate using the button above.</p>
+</div>
+{% endif %}
+
+</div>
+</body>
+  </html>
+  
