@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>EPHI Admin Dashboard</title>
+</head>
+<body>
+    <h1>EPHI Certificate Dashboard</h1>
+
+    <p>Total Certificates: {{ total }}</p>
+    <p>Valid Certificates: {{ valid }}</p>
+
+    <form method="GET" action="/admin">
+        <input type="text" name="q" value="{{ q }}" placeholder="Search certificate">
+        <button type="submit">Search</button>
+    </form>
+
+    <p><a href="/admin/issue">Issue New Certificate</a></p>
+
+    <table border="1" cellpadding="8">
+        <tr>
+            <th>Certificate No</th>
+            <th>Recipient</th>
+            <th>Title</th>
+            <th>Status</th>
+        </tr>
+        {% for cert in certificates %}
+        <tr>
+            <td>{{ cert.cert_no }}</td>
+            <td>{{ cert.recipient }}</td>
+            <td>{{ cert.title }}</td>
+            <td>{{ cert.status }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+
+    <form method="POST" action="/logout">
+        <button type="submit">Logout</button>
+    </form>
+</body>
+</html>
