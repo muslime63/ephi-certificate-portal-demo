@@ -39,7 +39,7 @@ app.config.update(
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if "admin_id" not in session:
+        if "admin_id" not in session
             return redirect(url_for("login"))
         return f(*args, **kwargs)
     return decorated_function
