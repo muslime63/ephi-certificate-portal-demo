@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Issue Certificate | EPHI</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f2f5f9;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 650px;
+            margin: 30px auto;
+            background: white;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+        }
+        h2 {
+            color: #075b45;
+            text-align: center;
+        }
+        label {
+            display: block;
+            margin-top: 15px;
+            font-weight: bold;
+        }
+        input {
+            width: 100%;
+            padding: 11px;
+            margin-top: 6px;
+            box-sizing: border-box;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        button {
+            width: 100%;
+            padding: 13px;
+            margin-top: 22px;
+            background: #087653;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #055c40;
+        }
+        .back {
+            display: block;
+            text-align: center;
+            margin-top: 18px;
+            color: #075b45;
+        }
+        .message {
+            padding: 10px;
+            background: #fff0d5;
+            color: #744d00;
+            border-radius: 5px;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>EPHI Certificate Portal</h2>
+        <h3>Issue New Certificate</h3>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% for category, message in messages %}
+                <div class="message">{{ message }}</div>
+            {% endfor %}
+        {% endwith %}
+
+        <form method="POST" action="{{ url_for('issue') }}">
+
+            <label>Recipient Full Name</label>
+            <input type="text" name="recipient" required>
+
+            <label>Certificate Title</label>
+            <input type="text" name="title" required>
+
+            <label>Organization</label>
+            <input type="text" name="organization" required>
+
+            <label>Issue Date</label>
+            <input type="date" name="issue_date" required>
+
+            <label>Expiry Date (Optional)</label>
+            <input type="date" name="expiry_date">
+
+            <label>Signatory Name</label>
+            <input type="text" name="signatory" required>
+
+            <label>Certificate Number (Optional)</label>
+            <input type="text" name="cert_no">
+
+            <button type="submit">Issue Certificate</button>
+        </form>
+
+        <a class="back" href="{{ url_for('admin') }}">Back to Dashboard</a>
+    </div>
+</body>
+  </html>
