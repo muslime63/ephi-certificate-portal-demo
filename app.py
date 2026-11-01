@@ -18,7 +18,6 @@ from reportlab.pdfgen import canvas
 from reportlab.lib import colors
 from reportlab.lib.utils import ImageReader
 
-
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.environ.get(
     "DATABASE_PATH",
