@@ -477,9 +477,9 @@ def certificate_pdf(token):
         pdf.drawString(570, y, vaccine["vaccination_date"])
         y -= 20
 
-    # QR code contains Traveler ID ONLY.
+    # QR code displays the complete Traveler ID label and number.
     traveler_id = certificate.get("traveler_id") or ""
-    qr_image = qrcode.make(traveler_id)
+    qr_image = qrcode.make(f"Traveler ID: {traveler_id}")
 
     qr_buffer = io.BytesIO()
     qr_image.save(qr_buffer, format="PNG")
