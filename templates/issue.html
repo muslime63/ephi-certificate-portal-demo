@@ -51,12 +51,28 @@ button {
     border-radius: 5px;
     font-size: 16px;
     font-weight: bold;
+    cursor: pointer;
 }
 .note {
     background: #fff5d8;
     padding: 12px;
     border-radius: 5px;
     font-size: 13px;
+    line-height: 1.5;
+}
+.disclaimer {
+    background: #fce8e8;
+    color: #8b2020;
+    padding: 12px;
+    border-radius: 5px;
+    font-size: 13px;
+    font-weight: bold;
+    text-align: center;
+}
+.small {
+    color: #555;
+    font-size: 12px;
+    margin-top: 5px;
 }
 </style>
 </head>
@@ -66,8 +82,14 @@ button {
 
 <h2>Vaccination Record Management</h2>
 
+<div class="disclaimer">
+RECORD COPY – NOT AN INTERNATIONAL CERTIFICATE
+</div>
+
 <p class="note">
 Enter accurate information from the genuine vaccination record.
+The vaccine types are listed below. Enter the actual vaccination
+dates, manufacturers and batch numbers from the original records.
 Traveler ID and QR Code are generated automatically by the system.
 </p>
 
@@ -96,11 +118,16 @@ Traveler ID and QR Code are generated automatically by the system.
 <div class="section">
 <h3>2. Yellow Fever Vaccination</h3>
 
+<label>Vaccine Type</label>
+<input type="text" value="Yellow Fever" readonly>
+
 <label>Manufacturer</label>
-<input type="text" name="yellow_fever_manufacturer">
+<input type="text" name="yellow_fever_manufacturer"
+placeholder="Enter actual manufacturer">
 
 <label>Batch Number</label>
-<input type="text" name="yellow_fever_batch_no">
+<input type="text" name="yellow_fever_batch_no"
+placeholder="Enter actual batch number">
 
 <label>Date of Vaccination</label>
 <input type="date" name="yellow_fever_date">
@@ -109,11 +136,16 @@ Traveler ID and QR Code are generated automatically by the system.
 <div class="section">
 <h3>3. Oral Polio Vaccination</h3>
 
+<label>Vaccine Type</label>
+<input type="text" value="Oral Polio Vaccine" readonly>
+
 <label>Manufacturer</label>
-<input type="text" name="oral_polio_manufacturer">
+<input type="text" name="oral_polio_manufacturer"
+placeholder="Enter actual manufacturer">
 
 <label>Batch Number</label>
-<input type="text" name="oral_polio_batch_no">
+<input type="text" name="oral_polio_batch_no"
+placeholder="Enter actual batch number">
 
 <label>Date of Vaccination</label>
 <input type="date" name="oral_polio_date">
@@ -122,11 +154,16 @@ Traveler ID and QR Code are generated automatically by the system.
 <div class="section">
 <h3>4. Meningococcal A, C, Y, W135</h3>
 
+<label>Vaccine Type</label>
+<input type="text" value="Meningococcal A, C, Y, W135" readonly>
+
 <label>Manufacturer</label>
-<input type="text" name="meningococcal_manufacturer">
+<input type="text" name="meningococcal_manufacturer"
+placeholder="Enter actual manufacturer">
 
 <label>Batch Number</label>
-<input type="text" name="meningococcal_batch_no">
+<input type="text" name="meningococcal_batch_no"
+placeholder="Enter actual batch number">
 
 <label>Date of Vaccination</label>
 <input type="date" name="meningococcal_date">
@@ -143,7 +180,7 @@ Traveler ID and QR Code are generated automatically by the system.
 
 <label>Clinician Signature Reference</label>
 <input type="text" name="clinician_signature"
-placeholder="Authorized signature reference">
+placeholder="Enter authorized signature reference">
 
 <label>Authorized By</label>
 <input type="text" name="authorized_by" required>
