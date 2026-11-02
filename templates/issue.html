@@ -3,102 +3,89 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Issue Certificate | EPHI</title>
+    <title>Issue Yellow Fever Certificate</title>
     <style>
         body {
             font-family: Arial, sans-serif;
-            background: #f2f5f9;
-            margin: 0;
+            background: #f3f4f6;
             padding: 20px;
         }
-        .container {
-            max-width: 650px;
+        .portal-container {
+            max-width: 500px;
             margin: 30px auto;
             background: white;
             padding: 25px;
             border-radius: 10px;
-            box-shadow: 0 2px 12px rgba(0,0,0,0.1);
         }
-        h2 {
-            color: #075b45;
-            text-align: center;
-        }
+        h2, h3 { text-align: center; }
+        .form-group { margin-bottom: 16px; }
         label {
             display: block;
-            margin-top: 15px;
+            margin-bottom: 6px;
             font-weight: bold;
         }
-        input {
+        input, select {
             width: 100%;
             padding: 11px;
-            margin-top: 6px;
             box-sizing: border-box;
-            border: 1px solid #ccc;
-            border-radius: 5px;
         }
         button {
             width: 100%;
             padding: 13px;
-            margin-top: 22px;
-            background: #087653;
+            background: #167447;
             color: white;
-            border: none;
+            border: 0;
             border-radius: 5px;
-            font-size: 16px;
-            cursor: pointer;
-        }
-        button:hover {
-            background: #055c40;
-        }
-        .back {
-            display: block;
-            text-align: center;
-            margin-top: 18px;
-            color: #075b45;
-        }
-        .message {
-            padding: 10px;
-            background: #fff0d5;
-            color: #744d00;
-            border-radius: 5px;
-            margin-bottom: 10px;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h2>EPHI Certificate Portal</h2>
-        <h3>Issue New Certificate</h3>
+<div class="portal-container">
+    <h2>EPHI Certificate Portal</h2>
+    <h3>Yellow Fever Vaccination Record</h3>
 
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% for category, message in messages %}
-                <div class="message">{{ message }}</div>
-            {% endfor %}
-        {% endwith %}
-
-        <form method="POST" action="{{ url_for('issue') }}">
-
+    <form action="/admin/issue" method="POST">
+        <div class="form-group">
             <label>Recipient Full Name</label>
             <input type="text" name="recipient" required>
+        </div>
 
-            <label>Certificate Title</label>
-            <input type="text" name="title" required>
+        <div class="form-group">
+            <label>Date of Birth</label>
+            <input type="date" name="dob" required>
+        </div>
 
-            <label>Organization</label>
+        <div class="form-group">
+            <label>Sex</label>
+            <select name="sex" required>
+                <option value="Female">Female</option>
+                <option value="Male">Male</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label>Vaccine Type</label>
+            <input type="text" name="title"
+                   value="Yellow Fever Vaccination" readonly>
+        </div>
+
+        <div class="form-group">
+            <label>Organization / Authorized Vaccination Center</label>
             <input type="text" name="organization" required>
+        </div>
 
-            <label>Issue Date</label>
+        <div class="form-group">
+            <label>Date of Vaccination</label>
             <input type="date" name="issue_date" required>
+        </div>
 
-            <label>Expiry Date (Optional)</label>
-            <input type="date" name="expiry_date">
-
-            <label>Signatory Name</label>
+        <div class="form-group">
+            <label>Authorized Health Professional</label>
             <input type="text" name="signatory" required>
+        </div>
 
-            <label>Certificate Number (Optional)</label>
-            <input type="text" name="cert_no">
-
-            <button type="submit">Issue Certificate</button>
-        </form>
-<a class="back" href="/admin">Back to Dashboard</a>
+        <button type="submit">Save Vaccination Record</button>
+    </form>
+</div>
+</body>
+</html>
