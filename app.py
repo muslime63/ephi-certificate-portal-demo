@@ -487,7 +487,7 @@ def certificate_pdf(token):
     qr_buffer.seek(0)
 
     pdf.drawImage(
-        qr_buffer,
+        ImageReader(qr_buffer),
         width - 145,
         35,
         width=85,
