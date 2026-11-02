@@ -1,3 +1,4 @@
+
 import os
 import io
 import re
@@ -44,14 +45,22 @@ def db():
 
 def init_db():
     with db() as conn:
+
+        # Create admins table if it does not exist.
         conn.execute("""
             CREATE TABLE IF NOT EXISTS admins (
                 id SERIAL PRIMARY KEY,
-                username TEXT UNIQUE NOT NULL,
-                password TEXT NOT NULL
+                username TEXT UNIQUE NOT NULL
             )
         """)
 
+        # IMPORTANT: Add password column before updating admins.
+        conn.execute("""
+            ALTER TABLE admins
+            ADD COLUMN IF NOT EXISTS password TEXT
+        """)
+
+        # Create certificates table.
         conn.execute("""
             CREATE TABLE IF NOT EXISTS certificates (
                 id SERIAL PRIMARY KEY,
@@ -68,7 +77,7 @@ def init_db():
             )
         """)
 
-        # Add new columns without deleting existing records.
+        # Add new traveler information columns safely.
         columns = {
             "traveler_id": "TEXT",
             "dob": "TEXT",
@@ -91,6 +100,7 @@ def init_db():
             WHERE traveler_id IS NOT NULL
         """)
 
+        # Store individual vaccine records.
         conn.execute("""
             CREATE TABLE IF NOT EXISTS vaccinations (
                 id SERIAL PRIMARY KEY,
@@ -103,6 +113,7 @@ def init_db():
             )
         """)
 
+        # Synchronize admin login from Render environment variables.
         username = os.environ.get("ADMIN_USERNAME")
         password = os.environ.get("ADMIN_PASSWORD")
 
@@ -177,12 +188,16 @@ def login():
         password = request.form.get("password", "")
 
         with db() as conn:
-            admin = conn.execute(
+            admin_user = conn.execute(
                 "SELECT * FROM admins WHERE username = %s",
                 (username,)
             ).fetchone()
 
-        if admin and check_password_hash(admin["password"], password):
+        if (
+            admin_user
+            and admin_user.get("password")
+            and check_password_hash(admin_user["password"], password)
+        ):
             session["admin"] = username
             return redirect(url_for("admin"))
 
@@ -236,6 +251,12 @@ def issue():
         organization, clinician, authorized_by
     ]):
         flash("Maaloo odeeffannoo dirqama ta'e hunda guuti.")
+        return redirect(url_for("issue"))
+
+    try:
+        date.fromisoformat(dob)
+    except ValueError:
+        flash("Guyyaan dhalootaa sirrii miti.")
         return redirect(url_for("issue"))
 
     vaccine_fields = [
@@ -414,7 +435,6 @@ def certificate_pdf(token):
     )
 
     pdf.setFont("Helvetica", 11)
-
     y = height - 110
 
     details = [
