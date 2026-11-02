@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -19,11 +20,13 @@
         <p><strong>Status:</strong> {{ certificate['status'] }}</p>
 
         <p>
-            <a href="{{ verify_url }}">Verification Link</a>
+            <a href="{{ url_for('verify', token=certificate['token']) }}">
+                Verification Link
+            </a>
         </p>
 
         <p>
-            <a href="/certificate/{{ certificate['token'] }}.pdf">
+            <a href="{{ url_for('certificate_pdf', token=certificate['token']) }}">
                 Download Certificate PDF
             </a>
         </p>
@@ -31,6 +34,6 @@
         <p>Certificate not found.</p>
     {% endif %}
 
-    <p><a href="/admin">Back to Dashboard</a></p>
+    <p><a href="{{ url_for('admin') }}">Back to Dashboard</a></p>
 </body>
 </html>
