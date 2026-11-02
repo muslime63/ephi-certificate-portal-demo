@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -9,18 +10,35 @@
     <h2>Ethiopian Public Health Institute</h2>
     <h3>Certificate Verification Portal</h3>
 
-    {% if cert %}
+    {% if certificate %}
         <h3>Certificate Record Found</h3>
-        <p><strong>Certificate Number:</strong> {{ cert.cert_no }}</p>
-        <p><strong>Recipient:</strong> {{ cert.recipient }}</p>
-        <p><strong>Certificate Title:</strong> {{ cert.title }}</p>
-        <p><strong>Organization:</strong> {{ cert.organization }}</p>
-        <p><strong>Issue Date:</strong> {{ cert.issue_date }}</p>
-        <p><strong>Expiry Date:</strong> {{ cert.expiry_date or "N/A" }}</p>
-        <p><strong>Status:</strong> {{ cert.status }}</p>
+
+        <p><strong>Certificate Number:</strong> {{ certificate['cert_no'] }}</p>
+        <p><strong>Recipient:</strong> {{ certificate['recipient'] }}</p>
+        <p><strong>Certificate Title:</strong> {{ certificate['title'] }}</p>
+        <p><strong>Organization:</strong> {{ certificate['organization'] }}</p>
+        <p><strong>Issue Date:</strong> {{ certificate['issue_date'] }}</p>
+        <p><strong>Expiry Date:</strong> {{ certificate['expiry_date'] or "N/A" }}</p>
+        <p><strong>Status:</strong> {{ certificate['status'] }}</p>
+
         <p>This record is displayed from the certificate database.</p>
+
+        <h3>Vaccination Details</h3>
+        {% if vaccinations %}
+            {% for vaccine in vaccinations %}
+                <p><strong>Vaccine:</strong> {{ vaccine['vaccine_type'] }}</p>
+                <p><strong>Manufacturer:</strong> {{ vaccine['manufacturer'] }}</p>
+                <p><strong>Batch Number:</strong> {{ vaccine['batch_no'] }}</p>
+                <p><strong>Vaccination Date:</strong> {{ vaccine['vaccination_date'] }}</p>
+                <hr>
+            {% endfor %}
+        {% else %}
+            <p>No vaccination details found.</p>
+        {% endif %}
+
     {% else %}
         <h3>Certificate Not Found</h3>
     {% endif %}
 </body>
 </html>
+
