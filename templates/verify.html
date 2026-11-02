@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Certificate Verification</title>
+</head>
+<body>
+    <h2>Ethiopian Public Health Institute</h2>
+    <h3>Certificate Verification Portal</h3>
+
+    {% if cert %}
+        <h3>Certificate Record Found</h3>
+        <p><strong>Certificate Number:</strong> {{ cert.cert_no }}</p>
+        <p><strong>Recipient:</strong> {{ cert.recipient }}</p>
+        <p><strong>Certificate Title:</strong> {{ cert.title }}</p>
+        <p><strong>Organization:</strong> {{ cert.organization }}</p>
+        <p><strong>Issue Date:</strong> {{ cert.issue_date }}</p>
+        <p><strong>Expiry Date:</strong> {{ cert.expiry_date or "N/A" }}</p>
+        <p><strong>Status:</strong> {{ cert.status }}</p>
+        <p>This record is displayed from the certificate database.</p>
+    {% else %}
+        <h3>Certificate Not Found</h3>
+    {% endif %}
+</body>
+</html>
