@@ -25,5 +25,10 @@
         <p>Certificate not found.</p>
     {% endif %}
 <a href="/admin">Back to Dashboard</a>
+    <p>
+    <a href="/certificate/{{ cert.token }}.pdf">
+        Download Certificate PDF
+    </a>
+    </p>
 </body>
 </html>
