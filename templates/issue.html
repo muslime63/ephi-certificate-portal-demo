@@ -1,194 +1,257 @@
-
-<!DOCTYPE html>
+DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Vaccination Record Registration</title>
-
-<style>
-body {
-    font-family: Arial, sans-serif;
-    background: #f2f5f8;
-    margin: 0;
-    padding: 15px;
-}
-.container {
-    max-width: 700px;
-    margin: 20px auto;
-    background: white;
-    padding: 25px;
-    border-radius: 10px;
-    box-shadow: 0 2px 10px #ccc;
-}
-h2, h3 { color: #174c72; }
-h2 { text-align: center; }
-.section {
-    margin-top: 25px;
-    padding-top: 12px;
-    border-top: 1px solid #ddd;
-}
-label {
-    display: block;
-    margin-top: 13px;
-    font-weight: bold;
-}
-input, select {
-    width: 100%;
-    padding: 11px;
-    margin-top: 6px;
-    border: 1px solid #bbb;
-    border-radius: 5px;
-    box-sizing: border-box;
-}
-button {
-    width: 100%;
-    margin-top: 25px;
-    padding: 14px;
-    background: #176b45;
-    color: white;
-    border: 0;
-    border-radius: 5px;
-    font-size: 16px;
-    font-weight: bold;
-    cursor: pointer;
-}
-.note {
-    background: #fff5d8;
-    padding: 12px;
-    border-radius: 5px;
-    font-size: 13px;
-    line-height: 1.5;
-}
-.disclaimer {
-    background: #fce8e8;
-    color: #8b2020;
-    padding: 12px;
-    border-radius: 5px;
-    font-size: 13px;
-    font-weight: bold;
-    text-align: center;
-}
-.small {
-    color: #555;
-    font-size: 12px;
-    margin-top: 5px;
-}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>International Certificate of Vaccination or Prophylaxis</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f0f2f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            margin: 0;
+        }
+        .certificate-card {
+            width: 14.8cm;
+            height: 21cm;
+            background-color: #f7e400; /* Yellow background color matching the image */
+            border: 2px solid #000000;
+            padding: 20px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+        .top-panel {
+            display: flex;
+            border-bottom: 2px solid #000000;
+            padding-bottom: 15px;
+            height: 45%;
+        }
+        .left-instructions {
+            width: 50%;
+            padding-right: 15px;
+            border-right: 1px solid #000000;
+            font-size: 8.5px;
+            line-height: 1.35;
+            text-align: left;
+            color: #000000;
+        }
+        .left-instructions h3 {
+            margin-top: 0;
+            margin-bottom: 8px;
+            font-size: 10.5px;
+            font-weight: bold;
+            text-decoration: underline;
+        }
+        .left-instructions p {
+            margin: 0 0 8px 0;
+        }
+        .right-agency-header {
+            width: 50%;
+            padding-left: 15px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .logo-container {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-bottom: 10px;
+            width: 100%;
+        }
+        .logo-img {
+            width: 45px;
+            height: 45px;
+            object-fit: contain;
+        }
+        .gov-main-title {
+            font-size: 10px;
+            font-weight: bold;
+            margin: 2px 0;
+            letter-spacing: 0.5px;
+        }
+        .ministry-sub-title {
+            font-size: 8.5px;
+            font-weight: bold;
+            margin: 4px 0 15px 0;
+            line-height: 1.2;
+        }
+        .doc-title-main {
+            font-size: 11px;
+            font-weight: bold;
+            margin: 10px 0;
+            line-height: 1.3;
+        }
+        .traveler-id-block {
+            font-size: 11px;
+            font-weight: bold;
+            text-align: left;
+            width: 100%;
+            margin-top: auto;
+            margin-bottom: 5px;
+        }
+        .dotted-line {
+            border-bottom: 1px dotted #000000;
+            display: inline-block;
+            min-width: 120px;
+        }
+        .bottom-panel {
+            height: 52%;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+        }
+        .center-cert-heading {
+            text-align: center;
+            font-size: 11.5px;
+            font-weight: bold;
+            margin-bottom: 12px;
+            letter-spacing: 0.3px;
+        }
+        .cert-statement {
+            font-size: 10px;
+            line-height: 1.6;
+            margin-bottom: 12px;
+        }
+        .inline-fill {
+            border-bottom: 1px solid #000000;
+            display: inline-block;
+            padding: 0 4px;
+            font-weight: bold;
+        }
+        .vaccine-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 9px;
+            margin-top: 5px;
+        }
+        .vaccine-table th, .vaccine-table td {
+            border: 1px solid #000000;
+            padding: 5px 4px;
+            text-align: left;
+            vertical-align: middle;
+        }
+        .vaccine-table th {
+            font-weight: bold;
+            text-align: center;
+            font-size: 8.5px;
+            line-height: 1.2;
+        }
+        .vaccine-table td {
+            font-size: 8.5px;
+        }
+        .signature-cell {
+            text-align: center;
+            font-size: 12px;
+        }
+        .auth-footer {
+            margin-top: auto;
+            font-size: 10.5px;
+            display: flex;
+            justify-content: flex-start;
+            align-items: center;
+            padding-bottom: 5px;
+        }
+    </style>
 </head>
-
 <body>
-<div class="container">
 
-<h2>Vaccination Record Management</h2>
+<div class="certificate-card">
+    <!-- FUULA OLIROO (Top Panel) -->
+    <div class="top-panel">
+        <div class="left-instructions">
+            <h3>Information for travelers</h3>
+            <p>This digital certificate serves as official proof of an individual's travel vaccination status including Yellow Fever vaccination, as required under the International Health Regulations (IHR 2005).</p>
+            <p>According to IHR guidelines, the Certificate of Vaccination against Yellow Fever becomes valid 10 days after the date of vaccination and remains valid for the lifetime of the vaccinated individual.</p>
+            <p>Country-specific vaccination certificate requirements are published by the World Health Organization (WHO) in the annual guide Vaccination Requirements and Health Advice for International Travel.</p>
+            <p>For the latest travel health alerts, to locate designated Yellow Fever vaccination centers in Ethiopia, or to learn more about travel-related health services, please visit the Ethiopian Public Health Institute (EPHI) official website: https://ephi.gov.et</p>
+            <p style="margin-bottom: 0;">To obtain a new digital copy of your certificate or to verify its authenticity, visit <span class="dotted-line" style="min-width: 60px;"></span> and follow the instructions provided.</p>
+        </div>
+        
+        <div class="right-agency-header">
+            <div class="logo-container">
+                <!-- Logoon Ministeera Fayyaa fi EPHI asitti seenu -->
+                <img class="logo-img" src="https://wikimedia.org" alt="Ethiopia Emblem">
+                <img class="logo-img" src="https://wikimedia.org" alt="EPHI Logo">
+            </div>
+            <div class="gov-main-title">FEDERAL DEMOCRATIC REPUBLIC OF ETHIOPIA</div>
+            <div class="ministry-sub-title">MINISTRY OF HEALTH<br>ETHIOPIAN PUBLIC HEALTH INSTITUTE</div>
+            <div class="doc-title-main">International Certificate of Vaccination or<br>Prophylaxis</div>
+            <div class="traveler-id-block">Traveler ID: <span class="dotted-line" style="min-width: 140px;"></span></div>
+        </div>
+    </div>
 
-<div class="disclaimer">
-RECORD COPY – NOT AN INTERNATIONAL CERTIFICATE
+    <!-- FUULA GADIROO (Bottom Panel) -->
+    <div class="bottom-panel">
+        <div class="center-cert-heading">INTERNATIONAL CERTIFICATE OF VACCINATION OR PROPHYLAXIS</div>
+        
+        <div class="cert-statement">
+            This is to certify that <span class="inline-fill" style="width: 260px;"></span> whose signature follows <span class="inline-fill" style="width: 140px;"></span><br>
+            date of birth <span class="inline-fill" style="width: 80px;"></span> sex <span class="inline-fill" style="width: 60px;"></span> nationality of <span class="inline-fill" style="width: 100px;">Ethiopia</span><br>
+            has been vaccinated or received prophylaxis against the listed below vaccines in accordance with the International Health Regulations (IHR2005).
+        </div>
+
+        <table class="vaccine-table">
+            <thead>
+                <tr>
+                    <th style="width: 16%;">Date of<br>Vaccination</th>
+                    <th style="width: 24%;">Vaccine Type</th>
+                    <th style="width: 25%;">Manufacturer and Batch No.</th>
+                    <th style="width: 20%;">Name of Supervising<br>Clinician</th>
+                    <th style="width: 15%;">Signature of<br>Supervising<br>Clinician</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>29/09/2026</td>
+                    <td>Yellow Fever</td>
+                    <td>Chumakov Institute<br>584</td>
+                    <td></td>
+                    <td class="signature-cell">✍️</td>
+                </tr>
+                <tr>
+                    <td>29/09/2026</td>
+                    <td>Oral Polio Vaccine</td>
+                    <td>Serum Institute of India<br>18940033</td>
+                    <td></td>
+                    <td class="signature-cell">✍️</td>
+                </tr>
+                <tr>
+                    <td>29/09/2026</td>
+                    <td>Meningococcal A,C,Y,W135</td>
+                    <td>Serum Institute of India<br>2355T051</td>
+                    <td></td>
+                    <td class="signature-cell">✍️</td>
+                </tr>
+                <tr>
+                    <td>&nbsp;</td>
+                    <td>&nbsp;</td>
+                    <td>&nbsp;</td>
+                    <td>&nbsp;</td>
+                    <td>&nbsp;</td>
+                </tr>
+                <tr>
+                    <td>&nbsp;</td>
+                    <td>&nbsp;</td>
+                    <td>&nbsp;</td>
+                    <td>&nbsp;</td>
+                    <td>&nbsp;</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="auth-footer">
+            Authorized by: <span class="inline-fill" style="width: 150px; margin-left: 5px;"></span>
+        </div>
+    </div>
 </div>
 
-<p class="note">
-Enter accurate information from the genuine vaccination record.
-The vaccine types are listed below. Enter the actual vaccination
-dates, manufacturers and batch numbers from the original records.
-Traveler ID and QR Code are generated automatically by the system.
-</p>
-
-<form action="/admin/issue" method="POST">
-
-<div class="section">
-<h3>1. Traveler Information</h3>
-
-<label>Full Name</label>
-<input type="text" name="recipient" required>
-
-<label>Date of Birth</label>
-<input type="date" name="dob" required>
-
-<label>Sex</label>
-<select name="sex" required>
-<option value="">Select</option>
-<option value="Male">Male</option>
-<option value="Female">Female</option>
-</select>
-
-<label>Nationality</label>
-<input type="text" name="nationality" required>
-</div>
-
-<div class="section">
-<h3>2. Yellow Fever Vaccination</h3>
-
-<label>Vaccine Type</label>
-<input type="text" value="Yellow Fever" readonly>
-
-<label>Manufacturer</label>
-<input type="text" name="yellow_fever_manufacturer"
-placeholder="Enter actual manufacturer">
-
-<label>Batch Number</label>
-<input type="text" name="yellow_fever_batch_no"
-placeholder="Enter actual batch number">
-
-<label>Date of Vaccination</label>
-<input type="date" name="yellow_fever_date">
-</div>
-
-<div class="section">
-<h3>3. Oral Polio Vaccination</h3>
-
-<label>Vaccine Type</label>
-<input type="text" value="Oral Polio Vaccine" readonly>
-
-<label>Manufacturer</label>
-<input type="text" name="oral_polio_manufacturer"
-placeholder="Enter actual manufacturer">
-
-<label>Batch Number</label>
-<input type="text" name="oral_polio_batch_no"
-placeholder="Enter actual batch number">
-
-<label>Date of Vaccination</label>
-<input type="date" name="oral_polio_date">
-</div>
-
-<div class="section">
-<h3>4. Meningococcal A, C, Y, W135</h3>
-
-<label>Vaccine Type</label>
-<input type="text" value="Meningococcal A, C, Y, W135" readonly>
-
-<label>Manufacturer</label>
-<input type="text" name="meningococcal_manufacturer"
-placeholder="Enter actual manufacturer">
-
-<label>Batch Number</label>
-<input type="text" name="meningococcal_batch_no"
-placeholder="Enter actual batch number">
-
-<label>Date of Vaccination</label>
-<input type="date" name="meningococcal_date">
-</div>
-
-<div class="section">
-<h3>5. Clinician and Authorization</h3>
-
-<label>Organization / Vaccination Center</label>
-<input type="text" name="organization" required>
-
-<label>Supervising Clinician Name</label>
-<input type="text" name="supervising_clinician" required>
-
-<label>Clinician Signature Reference</label>
-<input type="text" name="clinician_signature"
-placeholder="Enter authorized signature reference">
-
-<label>Authorized By</label>
-<input type="text" name="authorized_by" required>
-</div>
-
-<button type="submit">Save Vaccination Record</button>
-
-</form>
-</div>
 </body>
 </html>
