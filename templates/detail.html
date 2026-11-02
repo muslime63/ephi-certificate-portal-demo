@@ -8,27 +8,29 @@
 <body>
     <h2>Certificate Details</h2>
 
-    {% if cert %}
-        <p><strong>Certificate Number:</strong> {{ cert.cert_no }}</p>
-        <p><strong>Recipient:</strong> {{ cert.recipient }}</p>
-        <p><strong>Certificate Title:</strong> {{ cert.title }}</p>
-        <p><strong>Organization:</strong> {{ cert.organization }}</p>
-        <p><strong>Issue Date:</strong> {{ cert.issue_date }}</p>
-        <p><strong>Expiry Date:</strong> {{ cert.expiry_date or "N/A" }}</p>
-        <p><strong>Signatory:</strong> {{ cert.signatory }}</p>
-        <p><strong>Status:</strong> {{ cert.status }}</p>
+    {% if certificate %}
+        <p><strong>Certificate Number:</strong> {{ certificate['cert_no'] }}</p>
+        <p><strong>Recipient:</strong> {{ certificate['recipient'] }}</p>
+        <p><strong>Certificate Title:</strong> {{ certificate['title'] }}</p>
+        <p><strong>Organization:</strong> {{ certificate['organization'] }}</p>
+        <p><strong>Issue Date:</strong> {{ certificate['issue_date'] }}</p>
+        <p><strong>Expiry Date:</strong> {{ certificate['expiry_date'] or "N/A" }}</p>
+        <p><strong>Signatory:</strong> {{ certificate['signatory'] }}</p>
+        <p><strong>Status:</strong> {{ certificate['status'] }}</p>
 
         <p>
             <a href="{{ verify_url }}">Verification Link</a>
         </p>
+
+        <p>
+            <a href="/certificate/{{ certificate['token'] }}.pdf">
+                Download Certificate PDF
+            </a>
+        </p>
     {% else %}
         <p>Certificate not found.</p>
     {% endif %}
-<a href="/admin">Back to Dashboard</a>
-    <p>
-    <a href="/certificate/{{ cert.token }}.pdf">
-        Download Certificate PDF
-    </a>
-    </p>
+
+    <p><a href="/admin">Back to Dashboard</a></p>
 </body>
 </html>
