@@ -18,6 +18,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 
 import qrcode
 from reportlab.lib.pagesizes import A4, landscape
+from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen import canvas
 
 
@@ -46,7 +47,6 @@ def db():
 def init_db():
     with db() as conn:
 
-        # Create admins table if it does not exist.
         conn.execute("""
             CREATE TABLE IF NOT EXISTS admins (
                 id SERIAL PRIMARY KEY,
@@ -54,13 +54,11 @@ def init_db():
             )
         """)
 
-        # IMPORTANT: Add password column before updating admins.
         conn.execute("""
             ALTER TABLE admins
             ADD COLUMN IF NOT EXISTS password TEXT
         """)
 
-        # Create certificates table.
         conn.execute("""
             CREATE TABLE IF NOT EXISTS certificates (
                 id SERIAL PRIMARY KEY,
@@ -77,7 +75,6 @@ def init_db():
             )
         """)
 
-        # Add new traveler information columns safely.
         columns = {
             "traveler_id": "TEXT",
             "dob": "TEXT",
@@ -100,7 +97,6 @@ def init_db():
             WHERE traveler_id IS NOT NULL
         """)
 
-        # Store individual vaccine records.
         conn.execute("""
             CREATE TABLE IF NOT EXISTS vaccinations (
                 id SERIAL PRIMARY KEY,
@@ -113,7 +109,6 @@ def init_db():
             )
         """)
 
-        # Synchronize admin login from Render environment variables.
         username = os.environ.get("ADMIN_USERNAME")
         password = os.environ.get("ADMIN_PASSWORD")
 
