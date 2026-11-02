@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Certificate Details</title>
+</head>
+<body>
+    <h2>Certificate Details</h2>
+
+    {% if cert %}
+        <p><strong>Certificate Number:</strong> {{ cert.cert_no }}</p>
+        <p><strong>Recipient:</strong> {{ cert.recipient }}</p>
+        <p><strong>Certificate Title:</strong> {{ cert.title }}</p>
+        <p><strong>Organization:</strong> {{ cert.organization }}</p>
+        <p><strong>Issue Date:</strong> {{ cert.issue_date }}</p>
+        <p><strong>Expiry Date:</strong> {{ cert.expiry_date or "N/A" }}</p>
+        <p><strong>Signatory:</strong> {{ cert.signatory }}</p>
+        <p><strong>Status:</strong> {{ cert.status }}</p>
+
+        <p>
+            <a href="{{ verify_url }}">Verification Link</a>
+        </p>
+    {% else %}
+        <p>Certificate not found.</p>
+    {% endif %}
+
+    <a href="{{ url_for('admin') }}">Back to Dashboard</a>
+</body>
+</html>
