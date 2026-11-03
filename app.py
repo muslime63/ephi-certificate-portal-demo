@@ -314,3 +314,24 @@ def certificate_pdf(token):
         download_name=f"{certificate.get('cert_no', 'record')}.pdf",
         mimetype="application/pdf"
     )
+import secrets
+import string
+
+def generate_traveler_id(existing_ids=None):
+    existing_ids = existing_ids or set()
+
+    while True:
+        letters = ''.join(
+            secrets.choice(string.ascii_uppercase)
+            for _ in range(4)
+        )
+
+        numbers = ''.join(
+            secrets.choice(string.digits)
+            for _ in range(6)
+        )
+
+        traveler_id = letters + numbers
+
+        if traveler_id not in existing_ids:
+            return traveler_id
