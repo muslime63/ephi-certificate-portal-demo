@@ -1,6 +1,7 @@
 @app.route("/certificate/<token>.pdf")
 def certificate_pdf(token):
     from reportlab.lib.units import cm
+    from flask import url_for
 
     with db() as con:
         cert = con.execute(
@@ -11,12 +12,12 @@ def certificate_pdf(token):
     if not cert:
         abort(404)
 
-    # Page size: 13 cm x 9.3 cm - Landscape
+    # Landscape page: 13 cm x 9.3 cm
     PAGE_SIZE = (13 * cm, 9.3 * cm)
 
     traveler_id = cert["cert_no"]
 
-    # QR contains Traveler ID only
+    # QR Code contains Traveler ID only
     qr = qrcode.make(traveler_id)
     qr_io = io.BytesIO()
     qr.save(qr_io, format="PNG")
@@ -26,10 +27,11 @@ def certificate_pdf(token):
     c = canvas.Canvas(buff, pagesize=PAGE_SIZE)
     w, h = PAGE_SIZE
 
-    # Background and border
+    # Background
     c.setFillColor(colors.white)
     c.rect(0, 0, w, h, fill=1, stroke=0)
 
+    # Border
     c.setStrokeColor(colors.HexColor("#174a6e"))
     c.setLineWidth(1.5)
     c.rect(10, 10, w - 20, h - 20, fill=0, stroke=1)
@@ -49,7 +51,7 @@ def certificate_pdf(token):
         "RECORD COPY - NOT AN INTERNATIONAL CERTIFICATE"
     )
 
-    # Helper function
+    # Information line
     def draw_line(x, y, label, value):
         c.setFillColor(colors.black)
         c.setFont("Helvetica-Bold", 5.2)
@@ -61,7 +63,7 @@ def certificate_pdf(token):
             str(value or "Not recorded")[:42]
         )
 
-    # LEFT COLUMN: Personal information
+    # LEFT COLUMN
     left_x = 18
     y = h - 52
 
@@ -85,6 +87,7 @@ def certificate_pdf(token):
 
     # Clinician information
     y -= 5
+
     c.setFont("Helvetica-Bold", 6.5)
     c.drawString(left_x, y, "CLINICIAN INFORMATION")
     y -= 13
@@ -99,7 +102,7 @@ def certificate_pdf(token):
         draw_line(left_x, y, label, value)
         y -= 11
 
-    # RIGHT COLUMN: Vaccination details
+    # RIGHT COLUMN
     right_x = 190
     y = h - 52
 
@@ -160,27 +163,38 @@ def certificate_pdf(token):
     c.drawString(w - 58, 12, "TRAVELER ID QR")
 
     # Clickable verification link
-    verify_link = verification_url(token)
+    verify_link = url_for(
+        "verify",
+        token=token,
+        _external=True
+    )
 
-    link_text = "OPEN DEMO RECORD VERIFICATION"
+    link_text = "OPEN RECORD VERIFICATION"
     link_x = 18
-    link_y = 28
+    link_y = 48
 
     c.setFillColor(colors.HexColor("#174a6e"))
-    c.setFont("Helvetica-Bold", 5.5)
-    c.drawString(link_x, link_y, link_text)
+    c.setFont("Helvetica-Bold", 7)
+
+    c.drawString(
+        link_x,
+        link_y,
+        link_text
+    )
 
     text_width = c.stringWidth(
-        link_text, "Helvetica-Bold", 5.5
+        link_text,
+        "Helvetica-Bold",
+        7
     )
 
     c.linkURL(
         verify_link,
         (
             link_x,
-            link_y - 2,
+            link_y - 3,
             link_x + text_width,
-            link_y + 8
+            link_y + 10
         ),
         relative=0
     )
@@ -188,6 +202,7 @@ def certificate_pdf(token):
     # Footer
     c.setFillColor(colors.black)
     c.setFont("Helvetica", 4.5)
+
     c.drawString(
         18, 18,
         "Demonstration personal record only."
