@@ -1,6 +1,7 @@
-
 @app.route("/certificate/<token>.pdf")
 def certificate_pdf(token):
+    from reportlab.lib.units import cm
+
     with db() as con:
         cert = con.execute(
             "SELECT * FROM certificates WHERE token=?",
@@ -10,138 +11,186 @@ def certificate_pdf(token):
     if not cert:
         abort(404)
 
-    # QR Code contains ONLY the Traveler ID.
-    traveler_id = cert["cert_no"]
-    qr = qrcode.make(traveler_id)
+    # Page size: 13 cm x 9.3 cm - Landscape
+    PAGE_SIZE = (13 * cm, 9.3 * cm)
 
+    traveler_id = cert["cert_no"]
+
+    # QR contains Traveler ID only
+    qr = qrcode.make(traveler_id)
     qr_io = io.BytesIO()
     qr.save(qr_io, format="PNG")
     qr_io.seek(0)
 
     buff = io.BytesIO()
-    c = canvas.Canvas(buff, pagesize=A4)
-    w, h = A4
+    c = canvas.Canvas(buff, pagesize=PAGE_SIZE)
+    w, h = PAGE_SIZE
 
+    # Background and border
     c.setFillColor(colors.white)
     c.rect(0, 0, w, h, fill=1, stroke=0)
 
     c.setStrokeColor(colors.HexColor("#174a6e"))
-    c.setLineWidth(3)
-    c.rect(25, 25, w - 50, h - 50, fill=0, stroke=1)
+    c.setLineWidth(1.5)
+    c.rect(10, 10, w - 20, h - 20, fill=0, stroke=1)
 
+    # Header
     c.setFillColor(colors.HexColor("#174a6e"))
-    c.setFont("Helvetica-Bold", 17)
+    c.setFont("Helvetica-Bold", 9)
     c.drawCentredString(
-        w / 2, h - 65,
+        w / 2, h - 23,
         "PERSONAL VACCINATION RECORD"
     )
 
     c.setFillColor(colors.red)
-    c.setFont("Helvetica-Bold", 10)
+    c.setFont("Helvetica-Bold", 5.5)
     c.drawCentredString(
-        w / 2, h - 85,
+        w / 2, h - 34,
         "RECORD COPY - NOT AN INTERNATIONAL CERTIFICATE"
     )
 
-    draw_y = h - 125
-
-    def line(label, value):
-        nonlocal draw_y
+    # Helper function
+    def draw_line(x, y, label, value):
         c.setFillColor(colors.black)
-        c.setFont("Helvetica-Bold", 9)
-        c.drawString(48, draw_y, label + ":")
-        c.setFont("Helvetica", 9)
+        c.setFont("Helvetica-Bold", 5.2)
+        c.drawString(x, y, label + ":")
+
+        c.setFont("Helvetica", 5.2)
         c.drawString(
-            190, draw_y,
-            str(value or "Not recorded")[:75]
+            x + 68, y,
+            str(value or "Not recorded")[:42]
         )
-        draw_y -= 19
 
-    line("Traveler ID", traveler_id)
-    line("Full Name", cert["recipient"])
-    line("Date of Birth", cert["dob"])
-    line("Sex", cert["sex"])
-    line("Nationality", cert["nationality"])
-    line("Organization", cert["organization"])
-    line("Record Date", cert["issue_date"])
+    # LEFT COLUMN: Personal information
+    left_x = 18
+    y = h - 52
 
-    draw_y -= 8
-    c.setFont("Helvetica-Bold", 11)
-    c.drawString(48, draw_y, "VACCINATION DETAILS")
-    draw_y -= 23
+    c.setFont("Helvetica-Bold", 6.5)
+    c.drawString(left_x, y, "TRAVELER INFORMATION")
+    y -= 13
 
-    line("Yellow Fever Manufacturer", cert["yellow_fever_manufacturer"])
-    line("Yellow Fever Batch Number", cert["yellow_fever_batch_no"])
-    line("Yellow Fever Date", cert["yellow_fever_date"])
+    personal_data = [
+        ("Traveler ID", traveler_id),
+        ("Full Name", cert["recipient"]),
+        ("Date of Birth", cert["dob"]),
+        ("Sex", cert["sex"]),
+        ("Nationality", cert["nationality"]),
+        ("Organization", cert["organization"]),
+        ("Record Date", cert["issue_date"]),
+    ]
 
-    draw_y -= 8
-    line("Oral Polio Manufacturer", cert["oral_polio_manufacturer"])
-    line("Oral Polio Batch Number", cert["oral_polio_batch_no"])
-    line("Oral Polio Date", cert["oral_polio_date"])
+    for label, value in personal_data:
+        draw_line(left_x, y, label, value)
+        y -= 11
 
-    draw_y -= 8
-    line("Meningococcal Manufacturer", cert["meningococcal_manufacturer"])
-    line("Meningococcal Batch Number", cert["meningococcal_batch_no"])
-    line("Meningococcal Date", cert["meningococcal_date"])
+    # Clinician information
+    y -= 5
+    c.setFont("Helvetica-Bold", 6.5)
+    c.drawString(left_x, y, "CLINICIAN INFORMATION")
+    y -= 13
 
-    draw_y -= 8
-    c.setFont("Helvetica-Bold", 11)
-    c.drawString(48, draw_y, "CLINICIAN AND AUTHORIZATION")
-    draw_y -= 23
+    clinician_data = [
+        ("Clinician", cert["supervising_clinician"]),
+        ("Signature Ref.", cert["clinician_signature"]),
+        ("Authorized By", cert["authorized_by"]),
+    ]
 
-    line("Supervising Clinician", cert["supervising_clinician"])
-    line("Signature Reference", cert["clinician_signature"])
-    line("Authorized By", cert["authorized_by"])
+    for label, value in clinician_data:
+        draw_line(left_x, y, label, value)
+        y -= 11
 
-    # QR Code: Traveler ID only
+    # RIGHT COLUMN: Vaccination details
+    right_x = 190
+    y = h - 52
+
+    c.setFont("Helvetica-Bold", 6.5)
+    c.drawString(right_x, y, "VACCINATION DETAILS")
+    y -= 15
+
+    vaccines = [
+        (
+            "YELLOW FEVER",
+            [
+                ("Manufacturer", cert["yellow_fever_manufacturer"]),
+                ("Batch Number", cert["yellow_fever_batch_no"]),
+                ("Date", cert["yellow_fever_date"]),
+            ]
+        ),
+        (
+            "ORAL POLIO",
+            [
+                ("Manufacturer", cert["oral_polio_manufacturer"]),
+                ("Batch Number", cert["oral_polio_batch_no"]),
+                ("Date", cert["oral_polio_date"]),
+            ]
+        ),
+        (
+            "MENINGOCOCCAL",
+            [
+                ("Manufacturer", cert["meningococcal_manufacturer"]),
+                ("Batch Number", cert["meningococcal_batch_no"]),
+                ("Date", cert["meningococcal_date"]),
+            ]
+        ),
+    ]
+
+    for vaccine_name, details in vaccines:
+        c.setFillColor(colors.HexColor("#174a6e"))
+        c.setFont("Helvetica-Bold", 5.8)
+        c.drawString(right_x, y, vaccine_name)
+        y -= 11
+
+        for label, value in details:
+            draw_line(right_x, y, label, value)
+            y -= 10
+
+        y -= 5
+
+    # QR Code
     c.drawImage(
         ImageReader(qr_io),
-        w - 125, 45,
-        width=75,
-        height=75,
+        w - 53, 17,
+        width=35,
+        height=35,
         preserveAspectRatio=True,
         mask="auto"
     )
 
-    c.setFont("Helvetica-Bold", 8)
-    c.drawString(w - 145, 35, "TRAVELER ID QR")
+    c.setFont("Helvetica-Bold", 4.5)
+    c.drawString(w - 58, 12, "TRAVELER ID QR")
 
-    # Separate clickable verification link
+    # Clickable verification link
     verify_link = verification_url(token)
 
-    c.setFillColor(colors.HexColor("#174a6e"))
-    c.setFont("Helvetica-Bold", 9)
-
     link_text = "OPEN DEMO RECORD VERIFICATION"
-    link_x = 48
-    link_y = 85
+    link_x = 18
+    link_y = 28
 
+    c.setFillColor(colors.HexColor("#174a6e"))
+    c.setFont("Helvetica-Bold", 5.5)
     c.drawString(link_x, link_y, link_text)
 
     text_width = c.stringWidth(
-        link_text, "Helvetica-Bold", 9
+        link_text, "Helvetica-Bold", 5.5
     )
 
     c.linkURL(
         verify_link,
         (
             link_x,
-            link_y - 3,
+            link_y - 2,
             link_x + text_width,
-            link_y + 12
+            link_y + 8
         ),
         relative=0
     )
 
+    # Footer
     c.setFillColor(colors.black)
-    c.setFont("Helvetica", 7)
+    c.setFont("Helvetica", 4.5)
     c.drawString(
-        48, 55,
+        18, 18,
         "Demonstration personal record only."
-    )
-    c.drawString(
-        48, 43,
-        "Not valid as an official travel or international vaccination certificate."
     )
 
     c.save()
