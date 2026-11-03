@@ -1,341 +1,268 @@
 import os
-import io
-import re
-import sqlite3
-import secrets
+import random
 import string
-from datetime import date, datetime
-from functools import wraps
-
+import io
+import datetime
+from flask import Flask, render_template, redirect, url_for, request, flash, send_file
+from flask_sqlalchemy import SQLAlchemy
+from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
+from werkzeug.security import generate_password_hash, check_password_hash
 import qrcode
-from flask import (
-    Flask, render_template, request, redirect, url_for, flash,
-    session, abort, send_file, make_response
-)
+from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
-from reportlab.lib import colors
-from reportlab.lib.units import cm
-from reportlab.lib.utils import ImageReader
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY", "change-this-secret-before-deployment")
+app.config['SECRET_KEY'] = 'ephi-secret-key-change-in-production'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///ephi_vaccine.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# On Render, set DATABASE_PATH to a file on your persistent disk, for example:
-# /var/data/certificates.db
-DATABASE_PATH = os.environ.get(
-    "DATABASE_PATH",
-    os.path.join(os.path.dirname(__file__), "certificates.db")
-)
-ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "admin")
-ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
+db = SQLAlchemy(app)
+login_manager = LoginManager(app)
+login_manager.login_view = 'login'
 
-VACCINES = {
-    "yellow_fever": "Yellow Fever",
-    "oral_polio": "Oral Polio Vaccine",
-    "meningococcal": "Meningococcal ACYW135",
-}
+# --- MODELS ---
 
-def db():
-    con = sqlite3.connect(DATABASE_PATH)
-    con.row_factory = sqlite3.Row
-    return con
+class Admin(UserMixin, db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(50), unique=True, nullable=False)
+    password_hash = db.Column(db.String(255), nullable=False)
 
-def init_db():
-    folder = os.path.dirname(DATABASE_PATH)
-    if folder:
-        os.makedirs(folder, exist_ok=True)
-    with db() as con:
-        con.execute("""
-            CREATE TABLE IF NOT EXISTS certificates (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                token TEXT UNIQUE NOT NULL,
-                cert_no TEXT UNIQUE NOT NULL,
-                recipient TEXT NOT NULL,
-                dob TEXT,
-                sex TEXT,
-                nationality TEXT,
-                organization TEXT,
-                issue_date TEXT NOT NULL,
-                supervising_clinician TEXT,
-                clinician_signature TEXT,
-                authorized_by TEXT,
-                yellow_fever_type TEXT,
-                yellow_fever_manufacturer TEXT,
-                yellow_fever_batch_no TEXT,
-                yellow_fever_date TEXT,
-                oral_polio_type TEXT,
-                oral_polio_manufacturer TEXT,
-                oral_polio_batch_no TEXT,
-                oral_polio_date TEXT,
-                meningococcal_type TEXT,
-                meningococcal_manufacturer TEXT,
-                meningococcal_batch_no TEXT,
-                meningococcal_date TEXT,
-                status TEXT NOT NULL DEFAULT 'ACTIVE',
-                created_at TEXT NOT NULL
-            )
-        """)
-        con.execute("""
-            CREATE TABLE IF NOT EXISTS audit_log (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                action TEXT NOT NULL,
-                record_id INTEGER,
-                detail TEXT,
-                created_at TEXT NOT NULL
-            )
-        """)
+class VaccinationRecord(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    traveler_id = db.Column(db.String(10), unique=True, nullable=False)
+    full_name = db.Column(db.String(150), nullable=False)
+    dob = db.Column(db.String(20), nullable=False)
+    sex = db.Column(db.String(10), nullable=False)
+    nationality = db.Column(db.String(100), nullable=False)
+    
+    # Vaccine Details
+    yf_type = db.Column(db.String(100), default='Yellow Fever')
+    yf_manufacturer = db.Column(db.String(100))
+    yf_batch = db.Column(db.String(50))
+    yf_date = db.Column(db.String(20))
+    
+    opv_type = db.Column(db.String(100), default='Oral Polio Vaccine')
+    opv_manufacturer = db.Column(db.String(100))
+    opv_batch = db.Column(db.String(50))
+    opv_date = db.Column(db.String(20))
+    
+    men_type = db.Column(db.String(100), default='Meningococcal A, C, Y, W135')
+    men_manufacturer = db.Column(db.String(100))
+    men_batch = db.Column(db.String(50))
+    men_date = db.Column(db.String(20))
+    
+    # Clinician Info
+    organization = db.Column(db.String(150))
+    supervising_clinician = db.Column(db.String(150))
+    signature_ref = db.Column(db.String(100))
+    authorized_by = db.Column(db.String(150))
+    
+    # Status & Audit
+    status = db.Column(db.String(20), default='ACTIVE') # ACTIVE, REVOKED, ARCHIVED
+    revoked_reason = db.Column(db.Text, nullable=True)
+    revoked_at = db.Column(db.DateTime, nullable=True)
+    revoked_by = db.Column(db.String(50), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
 
-def audit(action, record_id=None, detail=""):
-    with db() as con:
-        con.execute(
-            "INSERT INTO audit_log(action, record_id, detail, created_at) VALUES (?, ?, ?, ?)",
-            (action, record_id, detail, datetime.utcnow().isoformat(timespec="seconds"))
-        )
+class AuditLog(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    admin_username = db.Column(db.String(50))
+    action = db.Column(db.String(255))
+    timestamp = db.Column(db.DateTime, default=datetime.datetime.utcnow)
 
-def admin_required(fn):
-    @wraps(fn)
-    def wrapper(*args, **kwargs):
-        if not session.get("is_admin"):
-            return redirect(url_for("login", next=request.path))
-        return fn(*args, **kwargs)
-    return wrapper
+@login_manager.user_loader
+def load_user(user_id):
+    return Admin.query.get(int(user_id))
 
-def csrf_token():
-    if "_csrf" not in session:
-        session["_csrf"] = secrets.token_urlsafe(24)
-    return session["_csrf"]
+# Helper to generate unique Traveler ID (4 letters + 6 digits)
+def generate_traveler_id():
+    while True:
+        letters = ''.join(random.choices(string.ascii_uppercase, k=4))
+        digits = ''.join(random.choices(string.digits, k=6))
+        tid = f"{letters}{digits}"
+        if not VaccinationRecord.query.filter_by(traveler_id=tid).first():
+            return tid
 
-@app.context_processor
-def inject_csrf():
-    return {"csrf_token": csrf_token}
+def log_action(action):
+    log = AuditLog(admin_username=current_user.username if current_user.is_authenticated else 'System', action=action)
+    db.session.add(log)
+    db.session.commit()
 
-def check_csrf():
-    if request.form.get("_csrf") != session.get("_csrf"):
-        abort(400, "Invalid form token. Refresh and try again.")
+# --- ROUTES ---
 
-def make_traveler_id():
-    alphabet = string.ascii_uppercase
-    digits = string.digits
-    with db() as con:
-        for _ in range(30):
-            candidate = "".join(secrets.choice(alphabet) for _ in range(4))
-            candidate += "".join(secrets.choice(digits) for _ in range(6))
-            exists = con.execute(
-                "SELECT 1 FROM certificates WHERE cert_no=?", (candidate,)
-            ).fetchone()
-            if not exists:
-                return candidate
-    raise RuntimeError("Could not create a unique Traveler ID")
-
-@app.route("/")
+@app.route('/')
 def home():
-    return redirect(url_for("login"))
+    return redirect(url_for('login'))
 
-@app.route("/login", methods=["GET", "POST"])
+@app.route('/login', methods=['GET', 'POST'])
 def login():
-    if request.method == "POST":
-        check_csrf()
-        username = request.form.get("username", "").strip()
-        password = request.form.get("password", "")
-        if not ADMIN_PASSWORD:
-            flash("Admin password is not configured. Set ADMIN_PASSWORD in the hosting environment.", "error")
-        elif secrets.compare_digest(username, ADMIN_USERNAME) and secrets.compare_digest(password, ADMIN_PASSWORD):
-            session.clear()
-            session["is_admin"] = True
-            session["username"] = username
-            session["_csrf"] = secrets.token_urlsafe(24)
-            return redirect(url_for("admin"))
-        else:
-            flash("Username or password is incorrect.", "error")
-    return render_template("login.html")
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        admin = Admin.query.filter_by(username=username).first()
+        if admin and check_password_hash(admin.password_hash, password):
+            login_user(admin)
+            log_action("Admin logged in")
+            return redirect(url_for('dashboard'))
+        flash('Username ykn password doggoraadha!', 'danger')
+    return render_template('login.html')
 
-@app.route("/logout", methods=["POST"])
-@admin_required
+@app.route('/logout')
+@login_required
 def logout():
-    check_csrf()
-    session.clear()
-    return redirect(url_for("login"))
+    log_action("Admin logged out")
+    logout_user()
+    return redirect(url_for('login'))
 
-@app.route("/admin")
-@admin_required
-def admin():
-    search = request.args.get("q", "").strip()
-    with db() as con:
-        counts = {
-            "total": con.execute("SELECT COUNT(*) FROM certificates").fetchone()[0],
-            "active": con.execute("SELECT COUNT(*) FROM certificates WHERE status='ACTIVE'").fetchone()[0],
-            "revoked": con.execute("SELECT COUNT(*) FROM certificates WHERE status='REVOKED'").fetchone()[0],
-            "archived": con.execute("SELECT COUNT(*) FROM certificates WHERE status='ARCHIVED'").fetchone()[0],
-        }
-        if search:
-            like = f"%{search}%"
-            records = con.execute("""
-                SELECT * FROM certificates
-                WHERE recipient LIKE ? OR cert_no LIKE ? OR nationality LIKE ?
-                ORDER BY id DESC
-            """, (like, like, like)).fetchall()
-        else:
-            records = con.execute("SELECT * FROM certificates ORDER BY id DESC").fetchall()
-        logs = con.execute("SELECT * FROM audit_log ORDER BY id DESC LIMIT 15").fetchall()
-    return render_template("admin.html", counts=counts, records=records, logs=logs, search=search)
+@app.route('/dashboard')
+@login_required
+def dashboard():
+    search_query = request.args.get('search', '')
+    if search_query:
+        records = VaccinationRecord.query.filter(
+            (VaccinationRecord.traveler_id.ilike(f'%{search_query}%')) |
+            (VaccinationRecord.full_name.ilike(f'%{search_query}%'))
+        ).all()
+    else:
+        records = VaccinationRecord.query.filter_by(status='ACTIVE').all()
+        
+    total_records = VaccinationRecord.query.count()
+    active_records = VaccinationRecord.query.filter_by(status='ACTIVE').count()
+    revoked_records = VaccinationRecord.query.filter_by(status='REVOKED').count()
+    archived_records = VaccinationRecord.query.filter_by(status='ARCHIVED').count()
 
-@app.route("/admin/issue", methods=["GET", "POST"])
-@admin_required
-def issue():
-    if request.method == "POST":
-        check_csrf()
-        recipient = request.form.get("recipient", "").strip()
-        if not recipient:
-            flash("Full Name is required.", "error")
-            return render_template("issue.html", vaccines=VACCINES)
-        token = secrets.token_urlsafe(24)
-        cert_no = make_traveler_id()
-        fields = [
-            "dob", "sex", "nationality", "organization", "supervising_clinician",
-            "clinician_signature", "authorized_by",
-            "yellow_fever_type", "yellow_fever_manufacturer", "yellow_fever_batch_no", "yellow_fever_date",
-            "oral_polio_type", "oral_polio_manufacturer", "oral_polio_batch_no", "oral_polio_date",
-            "meningococcal_type", "meningococcal_manufacturer", "meningococcal_batch_no", "meningococcal_date",
-        ]
-        values = [request.form.get(name, "").strip() for name in fields]
-        columns = ["token", "cert_no", "recipient"] + fields + ["issue_date", "created_at"]
-        row_values = [token, cert_no, recipient] + values + [date.today().isoformat(), datetime.utcnow().isoformat(timespec="seconds")]
-        placeholders = ",".join(["?"] * len(columns))
-        with db() as con:
-            con.execute(
-                f"INSERT INTO certificates ({','.join(columns)}) VALUES ({placeholders})",
-                row_values
-            )
-            record_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
-        audit("ISSUED", record_id, f"Traveler ID {cert_no}")
-        flash(f"Record saved. Traveler ID: {cert_no}", "success")
-        return redirect(url_for("admin"))
-    return render_template("issue.html", vaccines=VACCINES)
+    return render_template('admin.html', 
+                           records=records, 
+                           total=total_records, 
+                           active=active_records, 
+                           revoked=revoked_records, 
+                           archived=archived_records)
 
-@app.route("/admin/action/<int:record_id>", methods=["POST"])
-@admin_required
-def record_action(record_id):
-    check_csrf()
-    action = request.form.get("action", "")
-    allowed = {"REVOKE": "REVOKED", "RESTORE": "ACTIVE", "ARCHIVE": "ARCHIVED"}
-    if action not in allowed:
-        abort(400)
-    with db() as con:
-        record = con.execute("SELECT * FROM certificates WHERE id=?", (record_id,)).fetchone()
-        if not record:
-            abort(404)
-        con.execute("UPDATE certificates SET status=? WHERE id=?", (allowed[action], record_id))
-    audit(action, record_id, f"Status changed to {allowed[action]}")
-    flash(f"Record status updated to {allowed[action]}.", "success")
-    return redirect(url_for("admin"))
+@app.route('/issue', methods=['GET', 'POST'])
+@login_required
+def issue_record():
+    if request.method == 'POST':
+        tid = generate_traveler_id()
+        record = VaccinationRecord(
+            traveler_id=tid,
+            full_name=request.form.get('full_name'),
+            dob=request.form.get('dob'),
+            sex=request.form.get('sex'),
+            nationality=request.form.get('nationality'),
+            
+            yf_manufacturer=request.form.get('yf_manufacturer'),
+            yf_batch=request.form.get('yf_batch'),
+            yf_date=request.form.get('yf_date'),
+            
+            opv_manufacturer=request.form.get('opv_manufacturer'),
+            opv_batch=request.form.get('opv_batch'),
+            opv_date=request.form.get('opv_date'),
+            
+            men_manufacturer=request.form.get('men_manufacturer'),
+            men_batch=request.form.get('men_batch'),
+            men_date=request.form.get('men_date'),
+            
+            organization=request.form.get('organization'),
+            supervising_clinician=request.form.get('supervising_clinician'),
+            signature_ref=request.form.get('signature_ref'),
+            authorized_by=request.form.get('authorized_by')
+        )
+        db.session.add(record)
+        db.session.commit()
+        log_action(f"Issued new record for ID: {tid}")
+        flash(f'Galmeen haaraa galmeeffameera! Traveler ID: {tid}', 'success')
+        return redirect(url_for('view_certificate', traveler_id=tid))
+    return render_template('issue.html')
 
-@app.route("/admin/backup")
-@admin_required
-def backup():
-    if not os.path.exists(DATABASE_PATH):
-        abort(404)
-    return send_file(DATABASE_PATH, as_attachment=True, download_name="ephi_portal_backup.db")
+@app.route('/record/<traveler_id>')
+@login_required
+def view_certificate(traveler_id):
+    record = VaccinationRecord.query.filter_by(traveler_id=traveler_id).first_or_404()
+    verify_url = url_for('verify_record', traveler_id=record.traveler_id, _external=True)
+    
+    # Generate QR Code image in memory
+    qr = qrcode.QRCode(version=1, box_size=4, border=2)
+    qr.add_data(verify_url)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="black", back_color="white")
+    
+    img_buf = io.BytesIO()
+    img.save(img_buf, 'PNG')
+    import base64
+    qr_b64 = base64.b64encode(img_buf.getvalue()).decode('utf-8')
+    
+    return render_template('certificate.html', record=record, qr_code=qr_b64, verify_url=verify_url)
 
-@app.route("/verify/<token>")
-def verify(token):
-    with db() as con:
-        cert = con.execute("SELECT * FROM certificates WHERE token=?", (token,)).fetchone()
-    if not cert:
-        return render_template("verify.html", cert=None), 404
-    return render_template("verify.html", cert=cert)
+@app.route('/verify/<traveler_id>')
+def verify_record(traveler_id):
+    record = VaccinationRecord.query.filter_by(traveler_id=traveler_id).first()
+    return render_template('verify.html', record=record)
 
-@app.route("/certificate/<token>.pdf")
-def certificate_pdf(token):
-    with db() as con:
-        cert = con.execute("SELECT * FROM certificates WHERE token=?", (token,)).fetchone()
-    if not cert:
-        abort(404)
+@app.route('/revoke/<traveler_id>', methods=['POST'])
+@login_required
+def revoke_record(traveler_id):
+    record = VaccinationRecord.query.filter_by(traveler_id=traveler_id).first_or_404()
+    reason = request.form.get('reason', 'No reason provided')
+    record.status = 'REVOKED'
+    record.revoked_reason = reason
+    record.revoked_at = datetime.datetime.utcnow()
+    record.revoked_by = current_user.username
+    db.session.commit()
+    log_action(f"Revoked record: {traveler_id}")
+    flash('Record hojii irraa dhaabbateera (Revoked)!', 'warning')
+    return redirect(url_for('dashboard'))
 
-    traveler_id = cert["cert_no"]
-    qr = qrcode.make(f"Traveler ID: {traveler_id}")
-    qr_io = io.BytesIO()
-    qr.save(qr_io, format="PNG")
-    qr_io.seek(0)
+@app.route('/restore/<traveler_id>')
+@login_required
+def restore_record(traveler_id):
+    record = VaccinationRecord.query.filter_by(traveler_id=traveler_id).first_or_404()
+    record.status = 'ACTIVE'
+    db.session.commit()
+    log_action(f"Restored record: {traveler_id}")
+    flash('Record deebi’ee hojii irra ooleera!', 'success')
+    return redirect(url_for('dashboard'))
 
-    buff = io.BytesIO()
-    page_size = (13 * cm, 9.3 * cm)
-    c = canvas.Canvas(buff, pagesize=page_size)
-    w, h = page_size
-    c.setFillColor(colors.white)
-    c.rect(0, 0, w, h, fill=1, stroke=0)
-    c.setStrokeColor(colors.HexColor("#174a6e"))
-    c.setLineWidth(1.3)
-    c.rect(8, 8, w - 16, h - 16, fill=0, stroke=1)
+@app.route('/archive/<traveler_id>')
+@login_required
+def archive_record(traveler_id):
+    record = VaccinationRecord.query.filter_by(traveler_id=traveler_id).first_or_404()
+    record.status = 'ARCHIVED'
+    db.session.commit()
+    log_action(f"Archived record: {traveler_id}")
+    flash('Record kuusaa seenaatti dabalameera!', 'info')
+    return redirect(url_for('dashboard'))
 
-    c.setFillColor(colors.HexColor("#174a6e"))
-    c.setFont("Helvetica-Bold", 9)
-    c.drawCentredString(w / 2, h - 20, "PERSONAL VACCINATION RECORD")
-    c.setFillColor(colors.red)
-    c.setFont("Helvetica-Bold", 5.5)
-    c.drawCentredString(w / 2, h - 30, "RECORD COPY - NOT AN INTERNATIONAL CERTIFICATE")
+@app.route('/download-pdf/<traveler_id>')
+@login_required
+def download_pdf(traveler_id):
+    record = VaccinationRecord.query.filter_by(traveler_id=traveler_id).first_or_404()
+    buffer = io.BytesIO()
+    p = canvas.Canvas(buffer, pagesize=letter)
+    
+    p.drawString(100, 750, f"EPHI VACCINATION RECORD: {record.traveler_id}")
+    p.drawString(100, 730, f"Full Name: {record.full_name}")
+    p.drawString(100, 710, f"DOB: {record.dob} | Sex: {record.sex} | Nationality: {record.nationality}")
+    p.drawString(100, 680, f"Yellow Fever Date: {record.yf_date} Batch: {record.yf_batch}")
+    p.drawString(100, 660, f"OPV Date: {record.opv_date} Batch: {record.opv_batch}")
+    p.drawString(100, 640, f"Meningococcal Date: {record.men_date} Batch: {record.men_batch}")
+    p.drawString(100, 610, f"Authorized By: {record.authorized_by}")
+    p.drawString(100, 590, f"Status: {record.status}")
+    
+    p.showPage()
+    p.save()
+    buffer.seek(0)
+    return send_file(buffer, as_attachment=True, download_name=f"{record.traveler_id}_certificate.pdf", mimetype='application/pdf')
 
-    def line(x, y, label, value):
-        c.setFillColor(colors.black)
-        c.setFont("Helvetica-Bold", 5.1)
-        c.drawString(x, y, label + ":")
-        c.setFont("Helvetica", 5.1)
-        c.drawString(x + 63, y, str(value or "Not recorded")[:38])
+# DB Setup & Initial Admin Creation
+def init_db():
+    with app.app_context():
+        db.create_all()
+        if not Admin.query.filter_by(username='admin').first():
+            hashed_pw = generate_password_hash('admin123', method='scrypt')
+            default_admin = Admin(username='admin', password_hash=hashed_pw)
+            db.session.add(default_admin)
+            db.session.commit()
 
-    x1, y = 15, h - 47
-    c.setFont("Helvetica-Bold", 6)
-    c.drawString(x1, y, "TRAVELER INFORMATION")
-    y -= 11
-    for label, value in [
-        ("Traveler ID", traveler_id), ("Full Name", cert["recipient"]),
-        ("Date of Birth", cert["dob"]), ("Sex", cert["sex"]),
-        ("Nationality", cert["nationality"]), ("Organization", cert["organization"]),
-        ("Record Date", cert["issue_date"]), ("Status", cert["status"])
-    ]:
-        line(x1, y, label, value)
-        y -= 9
-
-    x2, y2 = 185, h - 47
-    c.setFont("Helvetica-Bold", 6)
-    c.drawString(x2, y2, "VACCINATION DETAILS")
-    y2 -= 12
-    for title, prefix in [
-        ("YELLOW FEVER", "yellow_fever"),
-        ("ORAL POLIO VACCINE", "oral_polio"),
-        ("MENINGOCOCCAL ACYW135", "meningococcal"),
-    ]:
-        c.setFillColor(colors.HexColor("#174a6e"))
-        c.setFont("Helvetica-Bold", 5.4)
-        c.drawString(x2, y2, title)
-        y2 -= 9
-        for label, suffix in [("Type", "type"), ("Manufacturer", "manufacturer"), ("Batch", "batch_no"), ("Date", "date")]:
-            line(x2, y2, label, cert[f"{prefix}_{suffix}"])
-            y2 -= 8
-        y2 -= 3
-
-    c.drawImage(ImageReader(qr_io), w - 48, 13, width=32, height=32, mask="auto")
-    c.setFont("Helvetica", 4.2)
-    c.drawString(w - 53, 9, "TRAVELER ID QR")
-
-    verify_link = url_for("verify", token=token, _external=True)
-    link_text = "OPEN RECORD VERIFICATION"
-    c.setFillColor(colors.HexColor("#174a6e"))
-    c.setFont("Helvetica-Bold", 6)
-    c.drawString(15, 35, link_text)
-    tw = c.stringWidth(link_text, "Helvetica-Bold", 6)
-    c.linkURL(verify_link, (15, 32, 15 + tw, 43), relative=0)
-    c.setFont("Helvetica", 3.8)
-    c.setFillColor(colors.blue)
-    c.drawString(15, 26, verify_link[:105])
-    c.setFillColor(colors.black)
-    c.setFont("Helvetica", 4.2)
-    c.drawString(15, 14, "Demonstration personal record only. Verify all details against original source records.")
-    c.save()
-    buff.seek(0)
-    return send_file(buff, mimetype="application/pdf", as_attachment=True,
-                     download_name=f"{traveler_id}-record.pdf")
-
-with app.app_context():
+if __name__ == '__main__':
     init_db()
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=False)
+    app.run(debug=True)
