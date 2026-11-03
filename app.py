@@ -205,7 +205,7 @@ def certificate_pdf(token):
         7
     )
 
-    c.linkURL(
+        c.linkURL(
         verify_link,
         (
             link_x,
@@ -215,10 +215,12 @@ def certificate_pdf(token):
         ),
         relative=0
     )
-# Display verification URL
-c.setFillColor(colors.blue)
-c.setFont("Helvetica", 5)
-c.drawString(18, 38, verify_link)
+
+    # Display verification URL
+    c.setFillColor(colors.blue)
+    c.setFont("Helvetica", 5)
+    c.drawString(18, 38, verify_link)
+
     # Footer
     c.setFillColor(colors.black)
     c.setFont("Helvetica", 4.5)
