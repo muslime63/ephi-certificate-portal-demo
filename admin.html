@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin Dashboard</title><style>
+body{font-family:Arial;margin:0;background:#f3f6f9;color:#233}header{background:#174a6e;color:white;padding:16px 5%;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+main{max-width:1100px;margin:22px auto;padding:0 14px}.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px}
+.stat,.panel{background:white;border-radius:9px;padding:15px;box-shadow:0 2px 8px #0000000b}.num{font-size:25px;font-weight:bold;color:#174a6e}
+a,button{cursor:pointer}a{color:#145b89}.btn,button{display:inline-block;padding:8px 11px;border:0;border-radius:5px;background:#174a6e;color:white;text-decoration:none;font-size:13px}
+.btn.gray{background:#65717b}.btn.green{background:#26734d}.btn.red{background:#a33}.actions{display:flex;gap:5px;flex-wrap:wrap}
+table{width:100%;border-collapse:collapse;background:white;font-size:13px}th,td{text-align:left;padding:9px;border-bottom:1px solid #e5e8eb;vertical-align:top}
+.wrap{overflow-x:auto;margin-top:12px}.flash{padding:10px;background:#e5f6e9;margin:10px 0;border-radius:5px}
+input{padding:9px;border:1px solid #bbb;border-radius:5px}.tag{font-weight:bold}.muted{color:#667}
+</style></head><body>
+<header><strong>EPHI Certificate Portal — Admin</strong>
+<form method="post" action="{{ url_for('logout') }}"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button class="btn gray">Logout</button></form></header>
+<main>
+{% with messages = get_flashed_messages() %}{% for message in messages %}<div class="flash">{{ message }}</div>{% endfor %}{% endwith %}
+<p><b>Demonstration personal records only — not official international certificates.</b></p>
+<section class="stats">
+<div class="stat">Total Records<div class="num">{{ counts.total }}</div></div>
+<div class="stat">Active<div class="num">{{ counts.active }}</div></div>
+<div class="stat">Revoked<div class="num">{{ counts.revoked }}</div></div>
+<div class="stat">Archived<div class="num">{{ counts.archived }}</div></div>
+</section>
+<p style="margin:18px 0"><a class="btn green" href="{{ url_for('issue') }}">+ Issue New Record</a>
+<a class="btn gray" href="{{ url_for('backup') }}">Download Database Backup</a></p>
+<section class="panel"><h3>Search Records</h3>
+<form method="get"><input name="q" value="{{ search }}" placeholder="Name, Traveler ID or nationality"><button>Search</button> <a href="{{ url_for('admin') }}">Clear</a></form>
+</section>
+<h3>Personal Vaccination Records</h3><div class="wrap"><table><thead><tr><th>Traveler ID</th><th>Name</th><th>Date</th><th>Status</th><th>Actions</th></tr></thead><tbody>
+{% for r in records %}<tr><td>{{ r.cert_no }}</td><td>{{ r.recipient }}</td><td>{{ r.issue_date }}</td><td class="tag">{{ r.status }}</td><td><div class="actions">
+<a class="btn" href="{{ url_for('verify', token=r.token) }}" target="_blank">Verify</a>
+<a class="btn gray" href="{{ url_for('certificate_pdf', token=r.token) }}">PDF</a>
+<form method="post" action="{{ url_for('record_action', record_id=r.id) }}"><input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+{% if r.status == 'ACTIVE' %}<button class="btn red" name="action" value="REVOKE">Revoke</button>{% else %}<button class="btn green" name="action" value="RESTORE">Restore</button>{% endif %}
+<button class="btn gray" name="action" value="ARCHIVE">Archive</button></form>
+</div></td></tr>{% else %}<tr><td colspan="5">No records found.</td></tr>{% endfor %}
+</tbody></table></div>
+<h3>Recent Audit Log</h3><div class="wrap"><table><tr><th>Time (UTC)</th><th>Action</th><th>Record ID</th><th>Detail</th></tr>
+{% for log in logs %}<tr><td>{{ log.created_at }}</td><td>{{ log.action }}</td><td>{{ log.record_id or '' }}</td><td>{{ log.detail }}</td></tr>{% else %}<tr><td colspan="4">No activity yet.</td></tr>{% endfor %}</table></div>
+</main></body></html>
