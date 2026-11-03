@@ -1,39 +1,51 @@
+import os
 import io
-import random
-import string
+import re
 import sqlite3
-import uuid
-from flask import (
-    Flask,
-    abort,
-    redirect,
-    render_template_string,
-    request,
-    send_file,
-    url_for,
-)
+import secrets
+import string
+from datetime import date, datetime
+from functools import wraps
+
 import qrcode
+from flask import (
+    Flask, render_template, request, redirect, url_for, flash,
+    session, abort, send_file, make_response
+)
+from reportlab.pdfgen import canvas
 from reportlab.lib import colors
 from reportlab.lib.units import cm
-from reportlab.pdfgen import canvas
 from reportlab.lib.utils import ImageReader
 
 app = Flask(__name__)
-app.secret_key = "secret-key-vaccine-record"
+app.secret_key = os.environ.get("SECRET_KEY", "change-this-secret-before-deployment")
 
-DATABASE = "certificates.db"
+# On Render, set DATABASE_PATH to a file on your persistent disk, for example:
+# /var/data/certificates.db
+DATABASE_PATH = os.environ.get(
+    "DATABASE_PATH",
+    os.path.join(os.path.dirname(__file__), "certificates.db")
+)
+ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "admin")
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
 
+VACCINES = {
+    "yellow_fever": "Yellow Fever",
+    "oral_polio": "Oral Polio Vaccine",
+    "meningococcal": "Meningococcal ACYW135",
+}
 
-def get_db():
-    con = sqlite3.connect(DATABASE)
+def db():
+    con = sqlite3.connect(DATABASE_PATH)
     con.row_factory = sqlite3.Row
     return con
 
-
 def init_db():
-    with get_db() as con:
-        con.execute(
-            """
+    folder = os.path.dirname(DATABASE_PATH)
+    if folder:
+        os.makedirs(folder, exist_ok=True)
+    with db() as con:
+        con.execute("""
             CREATE TABLE IF NOT EXISTS certificates (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 token TEXT UNIQUE NOT NULL,
@@ -43,485 +55,287 @@ def init_db():
                 sex TEXT,
                 nationality TEXT,
                 organization TEXT,
-                issue_date TEXT,
+                issue_date TEXT NOT NULL,
                 supervising_clinician TEXT,
                 clinician_signature TEXT,
                 authorized_by TEXT,
+                yellow_fever_type TEXT,
                 yellow_fever_manufacturer TEXT,
                 yellow_fever_batch_no TEXT,
                 yellow_fever_date TEXT,
+                oral_polio_type TEXT,
                 oral_polio_manufacturer TEXT,
                 oral_polio_batch_no TEXT,
                 oral_polio_date TEXT,
+                meningococcal_type TEXT,
                 meningococcal_manufacturer TEXT,
                 meningococcal_batch_no TEXT,
-                meningococcal_date TEXT
+                meningococcal_date TEXT,
+                status TEXT NOT NULL DEFAULT 'ACTIVE',
+                created_at TEXT NOT NULL
             )
-            """
+        """)
+        con.execute("""
+            CREATE TABLE IF NOT EXISTS audit_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                action TEXT NOT NULL,
+                record_id INTEGER,
+                detail TEXT,
+                created_at TEXT NOT NULL
+            )
+        """)
+
+def audit(action, record_id=None, detail=""):
+    with db() as con:
+        con.execute(
+            "INSERT INTO audit_log(action, record_id, detail, created_at) VALUES (?, ?, ?, ?)",
+            (action, record_id, detail, datetime.utcnow().isoformat(timespec="seconds"))
         )
-        con.commit()
 
+def admin_required(fn):
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        if not session.get("is_admin"):
+            return redirect(url_for("login", next=request.path))
+        return fn(*args, **kwargs)
+    return wrapper
 
-# Initialize database table on startup
-init_db()
+def csrf_token():
+    if "_csrf" not in session:
+        session["_csrf"] = secrets.token_urlsafe(24)
+    return session["_csrf"]
 
+@app.context_processor
+def inject_csrf():
+    return {"csrf_token": csrf_token}
 
-def generate_traveler_id():
-    """Generates a Traveler ID with 4 random uppercase letters + 6 digits (e.g. ABCD123456)"""
-    letters = "".join(random.choices(string.ascii_uppercase, k=4))
-    digits = "".join(random.choices(string.digits, k=6))
-    return f"{letters}{digits}"
+def check_csrf():
+    if request.form.get("_csrf") != session.get("_csrf"):
+        abort(400, "Invalid form token. Refresh and try again.")
 
+def make_traveler_id():
+    alphabet = string.ascii_uppercase
+    digits = string.digits
+    with db() as con:
+        for _ in range(30):
+            candidate = "".join(secrets.choice(alphabet) for _ in range(4))
+            candidate += "".join(secrets.choice(digits) for _ in range(6))
+            exists = con.execute(
+                "SELECT 1 FROM certificates WHERE cert_no=?", (candidate,)
+            ).fetchone()
+            if not exists:
+                return candidate
+    raise RuntimeError("Could not create a unique Traveler ID")
 
 @app.route("/")
-def index():
-    return redirect(url_for("admin_dashboard"))
+def home():
+    return redirect(url_for("login"))
 
-
-@app.route("/admin", methods=["GET"])
-def admin_dashboard():
-    query = request.args.get("q", "").strip()
-    with get_db() as con:
-        if query:
-            cur = con.execute(
-                """
-                SELECT * FROM certificates 
-                WHERE cert_no LIKE ? OR recipient LIKE ?
-                ORDER BY id DESC
-                """,
-                (f"%{query}%", f"%{query}%"),
-            )
-        else:
-            cur = con.execute("SELECT * FROM certificates ORDER BY id DESC")
-        records = cur.fetchall()
-
-    return render_template_string(ADMIN_HTML, records=records, query=query)
-
-
-@app.route("/create", methods=["GET", "POST"])
-def create_record():
-    error = None
-    auto_id = generate_traveler_id()
-
+@app.route("/login", methods=["GET", "POST"])
+def login():
     if request.method == "POST":
-        cert_no = request.form.get("cert_no", "").strip().upper()
-        token = str(uuid.uuid4())
+        check_csrf()
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+        if not ADMIN_PASSWORD:
+            flash("Admin password is not configured. Set ADMIN_PASSWORD in the hosting environment.", "error")
+        elif secrets.compare_digest(username, ADMIN_USERNAME) and secrets.compare_digest(password, ADMIN_PASSWORD):
+            session.clear()
+            session["is_admin"] = True
+            session["username"] = username
+            session["_csrf"] = secrets.token_urlsafe(24)
+            return redirect(url_for("admin"))
+        else:
+            flash("Username or password is incorrect.", "error")
+    return render_template("login.html")
 
-        try:
-            with get_db() as con:
-                con.execute(
-                    """
-                    INSERT INTO certificates (
-                        token, cert_no, recipient, dob, sex, nationality, organization, 
-                        issue_date, supervising_clinician, clinician_signature, authorized_by,
-                        yellow_fever_manufacturer, yellow_fever_batch_no, yellow_fever_date,
-                        oral_polio_manufacturer, oral_polio_batch_no, oral_polio_date,
-                        meningococcal_manufacturer, meningococcal_batch_no, meningococcal_date
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        token,
-                        cert_no,
-                        request.form.get("recipient"),
-                        request.form.get("dob"),
-                        request.form.get("sex"),
-                        request.form.get("nationality"),
-                        request.form.get("organization"),
-                        request.form.get("issue_date"),
-                        request.form.get("supervising_clinician"),
-                        request.form.get("clinician_signature"),
-                        request.form.get("authorized_by"),
-                        request.form.get("yellow_fever_manufacturer"),
-                        request.form.get("yellow_fever_batch_no"),
-                        request.form.get("yellow_fever_date"),
-                        request.form.get("oral_polio_manufacturer"),
-                        request.form.get("oral_polio_batch_no"),
-                        request.form.get("oral_polio_date"),
-                        request.form.get("meningococcal_manufacturer"),
-                        request.form.get("meningococcal_batch_no"),
-                        request.form.get("meningococcal_date"),
-                    ),
-                )
-                con.commit()
-            return redirect(url_for("admin_dashboard"))
-        except sqlite3.IntegrityError:
-            error = "Traveler ID hororiin kuusameera. Maaloo irra deebi'ii yaali."
+@app.route("/logout", methods=["POST"])
+@admin_required
+def logout():
+    check_csrf()
+    session.clear()
+    return redirect(url_for("login"))
 
-    return render_template_string(CREATE_HTML, auto_id=auto_id, error=error)
+@app.route("/admin")
+@admin_required
+def admin():
+    search = request.args.get("q", "").strip()
+    with db() as con:
+        counts = {
+            "total": con.execute("SELECT COUNT(*) FROM certificates").fetchone()[0],
+            "active": con.execute("SELECT COUNT(*) FROM certificates WHERE status='ACTIVE'").fetchone()[0],
+            "revoked": con.execute("SELECT COUNT(*) FROM certificates WHERE status='REVOKED'").fetchone()[0],
+            "archived": con.execute("SELECT COUNT(*) FROM certificates WHERE status='ARCHIVED'").fetchone()[0],
+        }
+        if search:
+            like = f"%{search}%"
+            records = con.execute("""
+                SELECT * FROM certificates
+                WHERE recipient LIKE ? OR cert_no LIKE ? OR nationality LIKE ?
+                ORDER BY id DESC
+            """, (like, like, like)).fetchall()
+        else:
+            records = con.execute("SELECT * FROM certificates ORDER BY id DESC").fetchall()
+        logs = con.execute("SELECT * FROM audit_log ORDER BY id DESC LIMIT 15").fetchall()
+    return render_template("admin.html", counts=counts, records=records, logs=logs, search=search)
 
+@app.route("/admin/issue", methods=["GET", "POST"])
+@admin_required
+def issue():
+    if request.method == "POST":
+        check_csrf()
+        recipient = request.form.get("recipient", "").strip()
+        if not recipient:
+            flash("Full Name is required.", "error")
+            return render_template("issue.html", vaccines=VACCINES)
+        token = secrets.token_urlsafe(24)
+        cert_no = make_traveler_id()
+        fields = [
+            "dob", "sex", "nationality", "organization", "supervising_clinician",
+            "clinician_signature", "authorized_by",
+            "yellow_fever_type", "yellow_fever_manufacturer", "yellow_fever_batch_no", "yellow_fever_date",
+            "oral_polio_type", "oral_polio_manufacturer", "oral_polio_batch_no", "oral_polio_date",
+            "meningococcal_type", "meningococcal_manufacturer", "meningococcal_batch_no", "meningococcal_date",
+        ]
+        values = [request.form.get(name, "").strip() for name in fields]
+        columns = ["token", "cert_no", "recipient"] + fields + ["issue_date", "created_at"]
+        row_values = [token, cert_no, recipient] + values + [date.today().isoformat(), datetime.utcnow().isoformat(timespec="seconds")]
+        placeholders = ",".join(["?"] * len(columns))
+        with db() as con:
+            con.execute(
+                f"INSERT INTO certificates ({','.join(columns)}) VALUES ({placeholders})",
+                row_values
+            )
+            record_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
+        audit("ISSUED", record_id, f"Traveler ID {cert_no}")
+        flash(f"Record saved. Traveler ID: {cert_no}", "success")
+        return redirect(url_for("admin"))
+    return render_template("issue.html", vaccines=VACCINES)
+
+@app.route("/admin/action/<int:record_id>", methods=["POST"])
+@admin_required
+def record_action(record_id):
+    check_csrf()
+    action = request.form.get("action", "")
+    allowed = {"REVOKE": "REVOKED", "RESTORE": "ACTIVE", "ARCHIVE": "ARCHIVED"}
+    if action not in allowed:
+        abort(400)
+    with db() as con:
+        record = con.execute("SELECT * FROM certificates WHERE id=?", (record_id,)).fetchone()
+        if not record:
+            abort(404)
+        con.execute("UPDATE certificates SET status=? WHERE id=?", (allowed[action], record_id))
+    audit(action, record_id, f"Status changed to {allowed[action]}")
+    flash(f"Record status updated to {allowed[action]}.", "success")
+    return redirect(url_for("admin"))
+
+@app.route("/admin/backup")
+@admin_required
+def backup():
+    if not os.path.exists(DATABASE_PATH):
+        abort(404)
+    return send_file(DATABASE_PATH, as_attachment=True, download_name="ephi_portal_backup.db")
 
 @app.route("/verify/<token>")
 def verify(token):
-    with get_db() as con:
-        cert = con.execute(
-            "SELECT * FROM certificates WHERE token=?", (token,)
-        ).fetchone()
-
+    with db() as con:
+        cert = con.execute("SELECT * FROM certificates WHERE token=?", (token,)).fetchone()
     if not cert:
-        return """
-        <div style="font-family: Arial; text-align: center; margin-top: 50px;">
-            <h2>Record Not Found</h2>
-            <p>No matching demonstration record was found in database.</p>
-        </div>
-        """, 404
-
-    return render_template_string(VERIFY_HTML, cert=cert)
-
+        return render_template("verify.html", cert=None), 404
+    return render_template("verify.html", cert=cert)
 
 @app.route("/certificate/<token>.pdf")
 def certificate_pdf(token):
-    with get_db() as con:
-        cert = con.execute(
-            "SELECT * FROM certificates WHERE token=?", (token,)
-        ).fetchone()
-
+    with db() as con:
+        cert = con.execute("SELECT * FROM certificates WHERE token=?", (token,)).fetchone()
     if not cert:
         abort(404)
 
-    PAGE_SIZE = (13 * cm, 9.3 * cm)
     traveler_id = cert["cert_no"]
-
-    # QR Code - Traveler ID qofa of keessaa qaba
-    qr = qrcode.make(traveler_id)
+    qr = qrcode.make(f"Traveler ID: {traveler_id}")
     qr_io = io.BytesIO()
     qr.save(qr_io, format="PNG")
     qr_io.seek(0)
 
     buff = io.BytesIO()
-    c = canvas.Canvas(buff, pagesize=PAGE_SIZE)
-    w, h = PAGE_SIZE
-
-    # Background
+    page_size = (13 * cm, 9.3 * cm)
+    c = canvas.Canvas(buff, pagesize=page_size)
+    w, h = page_size
     c.setFillColor(colors.white)
     c.rect(0, 0, w, h, fill=1, stroke=0)
-
-    # Border
     c.setStrokeColor(colors.HexColor("#174a6e"))
-    c.setLineWidth(1.5)
-    c.rect(10, 10, w - 20, h - 20, fill=0, stroke=1)
+    c.setLineWidth(1.3)
+    c.rect(8, 8, w - 16, h - 16, fill=0, stroke=1)
 
-    # Header
     c.setFillColor(colors.HexColor("#174a6e"))
     c.setFont("Helvetica-Bold", 9)
-    c.drawCentredString(w / 2, h - 23, "PERSONAL VACCINATION RECORD")
-
+    c.drawCentredString(w / 2, h - 20, "PERSONAL VACCINATION RECORD")
     c.setFillColor(colors.red)
     c.setFont("Helvetica-Bold", 5.5)
-    c.drawCentredString(
-        w / 2, h - 34, "RECORD COPY - NOT AN INTERNATIONAL CERTIFICATE"
-    )
+    c.drawCentredString(w / 2, h - 30, "RECORD COPY - NOT AN INTERNATIONAL CERTIFICATE")
 
-    def draw_line(x, y, label, value):
+    def line(x, y, label, value):
         c.setFillColor(colors.black)
-        c.setFont("Helvetica-Bold", 5.2)
+        c.setFont("Helvetica-Bold", 5.1)
         c.drawString(x, y, label + ":")
-        c.setFont("Helvetica", 5.2)
-        c.drawString(x + 68, y, str(value or "Not recorded")[:42])
+        c.setFont("Helvetica", 5.1)
+        c.drawString(x + 63, y, str(value or "Not recorded")[:38])
 
-    # LEFT COLUMN
-    left_x = 18
-    y = h - 52
+    x1, y = 15, h - 47
+    c.setFont("Helvetica-Bold", 6)
+    c.drawString(x1, y, "TRAVELER INFORMATION")
+    y -= 11
+    for label, value in [
+        ("Traveler ID", traveler_id), ("Full Name", cert["recipient"]),
+        ("Date of Birth", cert["dob"]), ("Sex", cert["sex"]),
+        ("Nationality", cert["nationality"]), ("Organization", cert["organization"]),
+        ("Record Date", cert["issue_date"]), ("Status", cert["status"])
+    ]:
+        line(x1, y, label, value)
+        y -= 9
 
-    c.setFont("Helvetica-Bold", 6.5)
-    c.drawString(left_x, y, "TRAVELER INFORMATION")
-    y -= 13
-
-    personal_data = [
-        ("Traveler ID", traveler_id),
-        ("Full Name", cert["recipient"]),
-        ("Date of Birth", cert["dob"]),
-        ("Sex", cert["sex"]),
-        ("Nationality", cert["nationality"]),
-        ("Organization", cert["organization"]),
-        ("Record Date", cert["issue_date"]),
-    ]
-
-    for label, value in personal_data:
-        draw_line(left_x, y, label, value)
-        y -= 11
-
-    # Clinician information
-    y -= 5
-    c.setFont("Helvetica-Bold", 6.5)
-    c.drawString(left_x, y, "CLINICIAN INFORMATION")
-    y -= 13
-
-    clinician_data = [
-        ("Clinician", cert["supervising_clinician"]),
-        ("Signature Ref.", cert["clinician_signature"]),
-        ("Authorized By", cert["authorized_by"]),
-    ]
-
-    for label, value in clinician_data:
-        draw_line(left_x, y, label, value)
-        y -= 11
-
-    # RIGHT COLUMN
-    right_x = 190
-    y = h - 52
-
-    c.setFont("Helvetica-Bold", 6.5)
-    c.drawString(right_x, y, "VACCINATION DETAILS")
-    y -= 15
-
-    vaccines = [
-        (
-            "YELLOW FEVER",
-            [
-                ("Manufacturer", cert["yellow_fever_manufacturer"]),
-                ("Batch Number", cert["yellow_fever_batch_no"]),
-                ("Date", cert["yellow_fever_date"]),
-            ],
-        ),
-        (
-            "ORAL POLIO",
-            [
-                ("Manufacturer", cert["oral_polio_manufacturer"]),
-                ("Batch Number", cert["oral_polio_batch_no"]),
-                ("Date", cert["oral_polio_date"]),
-            ],
-        ),
-        (
-            "MENINGOCOCCAL",
-            [
-                ("Manufacturer", cert["meningococcal_manufacturer"]),
-                ("Batch Number", cert["meningococcal_batch_no"]),
-                ("Date", cert["meningococcal_date"]),
-            ],
-        ),
-    ]
-
-    for vaccine_name, details in vaccines:
+    x2, y2 = 185, h - 47
+    c.setFont("Helvetica-Bold", 6)
+    c.drawString(x2, y2, "VACCINATION DETAILS")
+    y2 -= 12
+    for title, prefix in [
+        ("YELLOW FEVER", "yellow_fever"),
+        ("ORAL POLIO VACCINE", "oral_polio"),
+        ("MENINGOCOCCAL ACYW135", "meningococcal"),
+    ]:
         c.setFillColor(colors.HexColor("#174a6e"))
-        c.setFont("Helvetica-Bold", 5.8)
-        c.drawString(right_x, y, vaccine_name)
-        y -= 11
+        c.setFont("Helvetica-Bold", 5.4)
+        c.drawString(x2, y2, title)
+        y2 -= 9
+        for label, suffix in [("Type", "type"), ("Manufacturer", "manufacturer"), ("Batch", "batch_no"), ("Date", "date")]:
+            line(x2, y2, label, cert[f"{prefix}_{suffix}"])
+            y2 -= 8
+        y2 -= 3
 
-        for label, value in details:
-            draw_line(right_x, y, label, value)
-            y -= 10
+    c.drawImage(ImageReader(qr_io), w - 48, 13, width=32, height=32, mask="auto")
+    c.setFont("Helvetica", 4.2)
+    c.drawString(w - 53, 9, "TRAVELER ID QR")
 
-        y -= 5
-
-    # QR Code
-    c.drawImage(
-        ImageReader(qr_io),
-        w - 53,
-        17,
-        width=35,
-        height=35,
-        preserveAspectRatio=True,
-        mask="auto",
-    )
-
-    c.setFont("Helvetica-Bold", 4.5)
-    c.drawString(w - 58, 12, "TRAVELER ID QR")
-
-    # Verification link
     verify_link = url_for("verify", token=token, _external=True)
-
     link_text = "OPEN RECORD VERIFICATION"
-    link_x = 18
-    link_y = 48
-
     c.setFillColor(colors.HexColor("#174a6e"))
-    c.setFont("Helvetica-Bold", 7)
-    c.drawString(link_x, link_y, link_text)
-
-    text_width = c.stringWidth(link_text, "Helvetica-Bold", 7)
-
-    c.linkURL(
-        verify_link, (link_x, link_y - 3, link_x + text_width, link_y + 10), relative=0
-    )
-
+    c.setFont("Helvetica-Bold", 6)
+    c.drawString(15, 35, link_text)
+    tw = c.stringWidth(link_text, "Helvetica-Bold", 6)
+    c.linkURL(verify_link, (15, 32, 15 + tw, 43), relative=0)
+    c.setFont("Helvetica", 3.8)
     c.setFillColor(colors.blue)
-    c.setFont("Helvetica", 4)
-    c.drawString(18, 38, verify_link)
-
-    # Footer
+    c.drawString(15, 26, verify_link[:105])
     c.setFillColor(colors.black)
-    c.setFont("Helvetica", 4.5)
-    c.drawString(18, 18, "Demonstration personal record only.")
-
+    c.setFont("Helvetica", 4.2)
+    c.drawString(15, 14, "Demonstration personal record only. Verify all details against original source records.")
     c.save()
     buff.seek(0)
+    return send_file(buff, mimetype="application/pdf", as_attachment=True,
+                     download_name=f"{traveler_id}-record.pdf")
 
-    # Check if download or print/view inline requested
-    disposition = (
-        "inline" if request.args.get("action") == "print" else "attachment"
-    )
-
-    return send_file(
-        buff,
-        mimetype="application/pdf",
-        as_attachment=(disposition == "attachment"),
-        download_name=f"{traveler_id}-record.pdf",
-    )
-
-
-# ---------------- HTML TEMPLATES ---------------- #
-
-ADMIN_HTML = """
-<!doctype html>
-<html>
-<head>
-    <title>Admin Dashboard</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 30px; background: #f4f6f9; }
-        h1 { color: #174a6e; }
-        .btn { background: #174a6e; color: white; padding: 7px 14px; text-decoration: none; border-radius: 4px; font-size: 13px; display: inline-block; }
-        .btn-print { background: #2e7d32; }
-        .btn-verify { background: #0288d1; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; background: white; }
-        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; font-size: 14px; }
-        th { background: #174a6e; color: white; }
-        tr:hover { background: #f1f1f1; }
-        .search-box { margin-bottom: 20px; }
-        input[type="text"] { padding: 6px; width: 260px; }
-    </style>
-</head>
-<body>
-    <h1>Vaccination Records Dashboard</h1>
-    <div style="display: flex; justify-content: space-between; align-items: center;">
-        <form method="get" class="search-box">
-            <input type="text" name="q" value="{{ query }}" placeholder="Search by Traveler ID or Name...">
-            <button type="submit" class="btn" style="border:none; cursor:pointer;">Search</button>
-            {% if query %}<a href="/admin" style="margin-left: 10px; font-size: 14px;">Clear Search</a>{% endif %}
-        </form>
-        <a href="/create" class="btn">+ Create New Record</a>
-    </div>
-    <table>
-        <tr>
-            <th>Traveler ID</th>
-            <th>Recipient Name</th>
-            <th>Nationality</th>
-            <th>Issue Date</th>
-            <th>Actions</th>
-        </tr>
-        {% for r in records %}
-        <tr>
-            <td><strong>{{ r.cert_no }}</strong></td>
-            <td>{{ r.recipient }}</td>
-            <td>{{ r.nationality }}</td>
-            <td>{{ r.issue_date }}</td>
-            <td>
-                <a href="/certificate/{{ r.token }}.pdf" class="btn">Download PDF</a>
-                <a href="/certificate/{{ r.token }}.pdf?action=print" target="_blank" class="btn btn-print">Print PDF</a>
-                <a href="/verify/{{ r.token }}" target="_blank" class="btn btn-verify">Verification Link</a>
-            </td>
-        </tr>
-        {% else %}
-        <tr><td colspan="5" style="text-align: center;">Record tokkollee hin argamne.</td></tr>
-        {% endfor %}
-    </table>
-</body>
-</html>
-"""
-
-CREATE_HTML = """
-<!doctype html>
-<html>
-<head>
-    <title>Create Record</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 30px; background: #f4f6f9; }
-        .form-container { background: white; padding: 25px; border-radius: 6px; max-width: 650px; margin: 0 auto; box-shadow: 0px 0px 10px rgba(0,0,0,0.1); }
-        input { width: 100%; padding: 8px; margin: 4px 0 14px 0; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
-        label { font-weight: bold; font-size: 13px; color: #333; }
-        .btn { background: #174a6e; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
-        .error { color: red; font-weight: bold; margin-bottom: 15px; }
-        .readonly-id { background: #eef2f5; font-weight: bold; color: #174a6e; letter-spacing: 1px; }
-    </style>
-</head>
-<body>
-    <div class="form-container">
-        <h1>Create Vaccination Record</h1>
-        {% if error %}<div class="error">{{ error }}</div>{% endif %}
-        <form method="POST">
-            <label>Traveler ID (Auto-Generated: Qubee 4 + Lakkoofsa 6):</label>
-            <input type="text" name="cert_no" value="{{ auto_id }}" class="readonly-id" readonly>
-
-            <label>Recipient Full Name:</label>
-            <input type="text" name="recipient" required placeholder="Abebe Bikila">
-
-            <label>Date of Birth:</label>
-            <input type="date" name="dob">
-
-            <label>Sex:</label>
-            <input type="text" name="sex" placeholder="Male / Female">
-
-            <label>Nationality:</label>
-            <input type="text" name="nationality" placeholder="Ethiopian">
-
-            <label>Organization:</label>
-            <input type="text" name="organization" placeholder="Organization Name">
-
-            <label>Record Date:</label>
-            <input type="date" name="issue_date">
-
-            <h3 style="color: #174a6e; margin-top: 20px;">Clinician Information</h3>
-            <label>Supervising Clinician:</label>
-            <input type="text" name="supervising_clinician">
-
-            <label>Signature Ref.:</label>
-            <input type="text" name="clinician_signature">
-
-            <label>Authorized By:</label>
-            <input type="text" name="authorized_by">
-
-            <h3 style="color: #174a6e; margin-top: 20px;">Vaccination Details</h3>
-            
-            <label>Yellow Fever (Manufacturer / Batch / Date):</label>
-            <input type="text" name="yellow_fever_manufacturer" placeholder="Manufacturer">
-            <input type="text" name="yellow_fever_batch_no" placeholder="Batch Number">
-            <input type="date" name="yellow_fever_date">
-
-            <label>Oral Polio (Manufacturer / Batch / Date):</label>
-            <input type="text" name="oral_polio_manufacturer" placeholder="Manufacturer">
-            <input type="text" name="oral_polio_batch_no" placeholder="Batch Number">
-            <input type="date" name="oral_polio_date">
-
-            <label>Meningococcal (Manufacturer / Batch / Date):</label>
-            <input type="text" name="meningococcal_manufacturer" placeholder="Manufacturer">
-            <input type="text" name="meningococcal_batch_no" placeholder="Batch Number">
-            <input type="date" name="meningococcal_date">
-
-            <button type="submit" class="btn">Save Record</button>
-        </form>
-        <p style="margin-top: 15px;"><a href="/admin">&larr; Back to Dashboard</a></p>
-    </div>
-</body>
-</html>
-"""
-
-VERIFY_HTML = """
-<!doctype html>
-<html>
-<head>
-    <title>Record Verification</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 50px; background: #f4f6f9; text-align: center; }
-        .card { background: white; padding: 30px; border-radius: 8px; display: inline-block; text-align: left; box-shadow: 0px 0px 10px rgba(0,0,0,0.1); width: 400px; }
-        h2 { color: #2e7d32; text-align: center; margin-top: 0; }
-        .field { margin-bottom: 10px; font-size: 14px; }
-        .label { font-weight: bold; color: #555; }
-    </style>
-</head>
-<body>
-    <div class="card">
-        <h2>✓ Record Verified</h2>
-        <div class="field"><span class="label">Traveler ID:</span> {{ cert.cert_no }}</div>
-        <div class="field"><span class="label">Full Name:</span> {{ cert.recipient }}</div>
-        <div class="field"><span class="label">Nationality:</span> {{ cert.nationality }}</div>
-        <div class="field"><span class="label">Organization:</span> {{ cert.organization or 'N/A' }}</div>
-        <div class="field"><span class="label">Record Date:</span> {{ cert.issue_date }}</div>
-        <div class="field"><span class="label">Clinician:</span> {{ cert.supervising_clinician }}</div>
-        <hr style="margin: 20px 0; border:0; border-top:1px solid #ddd;">
-        <p style="color: #777; font-size: 12px; text-align: center; margin: 0;">This is an authentic registered demonstration record.</p>
-    </div>
-</body>
-</html>
-"""
+with app.app_context():
+    init_db()
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=False)
