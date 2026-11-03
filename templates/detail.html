@@ -1,39 +1,38 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Certificate Details</title>
+    <title>Vaccination Record Details</title>
 </head>
 <body>
-    <h2>Certificate Details</h2>
+    <h2>Vaccination Record Details</h2>
 
-    {% if certificate %}
-        <p><strong>Certificate Number:</strong> {{ certificate['cert_no'] }}</p>
-        <p><strong>Recipient:</strong> {{ certificate['recipient'] }}</p>
-        <p><strong>Certificate Title:</strong> {{ certificate['title'] }}</p>
-        <p><strong>Organization:</strong> {{ certificate['organization'] }}</p>
-        <p><strong>Issue Date:</strong> {{ certificate['issue_date'] }}</p>
-        <p><strong>Expiry Date:</strong> {{ certificate['expiry_date'] or "N/A" }}</p>
-        <p><strong>Signatory:</strong> {{ certificate['signatory'] }}</p>
-        <p><strong>Status:</strong> {{ certificate['status'] }}</p>
+    <p><strong>DEMO PERSONAL RECORD – NOT AN INTERNATIONAL CERTIFICATE</strong></p>
 
-        <p>
-            <a href="{{ url_for('verify', token=certificate['token']) }}">
-                Verification Link
-            </a>
-        </p>
+    {% if cert %}
+        <p><strong>Record Number:</strong> {{ cert['cert_no'] }}</p>
+        <p><strong>Full Name:</strong> {{ cert['recipient'] }}</p>
+        <p><strong>Date of Birth:</strong> {{ cert['dob'] or 'N/A' }}</p>
+        <p><strong>Sex:</strong> {{ cert['sex'] or 'N/A' }}</p>
+        <p><strong>Nationality:</strong> {{ cert['nationality'] or 'N/A' }}</p>
+        <p><strong>Vaccine:</strong> {{ cert['vaccine_type'] or 'N/A' }}</p>
+        <p><strong>Manufacturer:</strong> {{ cert['manufacturer'] or 'N/A' }}</p>
+        <p><strong>Batch Number:</strong> {{ cert['batch_number'] or 'N/A' }}</p>
+        <p><strong>Vaccination Date:</strong> {{ cert['vaccination_date'] or 'N/A' }}</p>
+        <p><strong>Supervising Clinician:</strong> {{ cert['supervising_clinician'] or 'N/A' }}</p>
 
         <p>
-            <a href="{{ url_for('certificate_pdf', token=certificate['token']) }}">
-                Download Certificate PDF
+            <a href="{{ url_for('certificate_pdf', token=cert['token']) }}">
+                Download Personal Record PDF
             </a>
         </p>
     {% else %}
-        <p>Certificate not found.</p>
+        <p>Record not found.</p>
     {% endif %}
 
-    <p><a href="{{ url_for('dashboard') }}">Back to Dashboard</a></p>
+    <p>
+        <a href="{{ url_for('dashboard') }}">Back to Dashboard</a>
+    </p>
 </body>
 </html>
