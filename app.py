@@ -236,9 +236,7 @@ def admin():
 
 import random
 
-# Yeroo form irraa data guutan Traveler ID ofumaan uumuuf
-traveler_id = "EHIP" + "".join([str(random.randint(0, 9)) for _ in range(8)])
-
+@app.route("/admin/issue", methods=["GET", "POST"])
 @login_required
 def issue():
     if request.method == "GET":
