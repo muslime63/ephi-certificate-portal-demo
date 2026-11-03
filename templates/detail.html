@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -6,33 +7,82 @@
     <title>Vaccination Record Details</title>
 </head>
 <body>
+
     <h2>Vaccination Record Details</h2>
 
-    <p><strong>DEMO PERSONAL RECORD – NOT AN INTERNATIONAL CERTIFICATE</strong></p>
+    <p>
+        <strong>
+            DEMO PERSONAL RECORD – NOT AN INTERNATIONAL CERTIFICATE
+        </strong>
+    </p>
 
     {% if cert %}
-        <p><strong>Record Number:</strong> {{ cert['cert_no'] }}</p>
+
+        <h3>Personal Information</h3>
+
+        <p><strong>Traveler ID:</strong> {{ cert['cert_no'] }}</p>
         <p><strong>Full Name:</strong> {{ cert['recipient'] }}</p>
         <p><strong>Date of Birth:</strong> {{ cert['dob'] or 'N/A' }}</p>
         <p><strong>Sex:</strong> {{ cert['sex'] or 'N/A' }}</p>
         <p><strong>Nationality:</strong> {{ cert['nationality'] or 'N/A' }}</p>
-        <p><strong>Vaccine:</strong> {{ cert['vaccine_type'] or 'N/A' }}</p>
-        <p><strong>Manufacturer:</strong> {{ cert['manufacturer'] or 'N/A' }}</p>
-        <p><strong>Batch Number:</strong> {{ cert['batch_number'] or 'N/A' }}</p>
-        <p><strong>Vaccination Date:</strong> {{ cert['vaccination_date'] or 'N/A' }}</p>
+        <p><strong>Organization:</strong> {{ cert['organization'] }}</p>
+        <p><strong>Record Date:</strong> {{ cert['issue_date'] }}</p>
+        <p><strong>Status:</strong> {{ cert['status'] }}</p>
+
+        <hr>
+
+        <h3>Yellow Fever Vaccination</h3>
+
+        <p><strong>Manufacturer:</strong> {{ cert['yellow_fever_manufacturer'] or 'N/A' }}</p>
+        <p><strong>Batch Number:</strong> {{ cert['yellow_fever_batch_no'] or 'N/A' }}</p>
+        <p><strong>Vaccination Date:</strong> {{ cert['yellow_fever_date'] or 'N/A' }}</p>
+
+        <h3>Oral Polio Vaccination</h3>
+
+        <p><strong>Manufacturer:</strong> {{ cert['oral_polio_manufacturer'] or 'N/A' }}</p>
+        <p><strong>Batch Number:</strong> {{ cert['oral_polio_batch_no'] or 'N/A' }}</p>
+        <p><strong>Vaccination Date:</strong> {{ cert['oral_polio_date'] or 'N/A' }}</p>
+
+        <h3>Meningococcal Vaccination</h3>
+
+        <p><strong>Manufacturer:</strong> {{ cert['meningococcal_manufacturer'] or 'N/A' }}</p>
+        <p><strong>Batch Number:</strong> {{ cert['meningococcal_batch_no'] or 'N/A' }}</p>
+        <p><strong>Vaccination Date:</strong> {{ cert['meningococcal_date'] or 'N/A' }}</p>
+
+        <hr>
+
+        <h3>Clinician Information</h3>
+
         <p><strong>Supervising Clinician:</strong> {{ cert['supervising_clinician'] or 'N/A' }}</p>
+        <p><strong>Authorized By:</strong> {{ cert['authorized_by'] or 'N/A' }}</p>
+
+        <hr>
+
+        <h3>Record Actions</h3>
+
+        <p>
+            <a href="{{ verify_url }}">
+                View Record Verification
+            </a>
+        </p>
 
         <p>
             <a href="{{ url_for('certificate_pdf', token=cert['token']) }}">
                 Download Personal Record PDF
             </a>
         </p>
+
     {% else %}
+
         <p>Record not found.</p>
+
     {% endif %}
 
     <p>
-        <a href="{{ url_for('dashboard') }}">Back to Dashboard</a>
+        <a href="{{ url_for('dashboard') }}">
+            Back to Dashboard
+        </a>
     </p>
+
 </body>
 </html>
