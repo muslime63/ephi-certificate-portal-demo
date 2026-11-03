@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Record Verification</title><style>
+body{font-family:Arial;background:#f2f5f8;margin:0;padding:20px;color:#233}.card{max-width:760px;margin:20px auto;background:white;padding:22px;border-radius:10px}
+h2{color:#174a6e}.status{font-size:20px;font-weight:bold;padding:10px;background:#edf3f7;border-radius:6px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+.item{padding:9px;border-bottom:1px solid #e4e8eb}.label{font-size:12px;color:#65717b}.value{font-weight:bold;overflow-wrap:anywhere}
+.notice{background:#fff2d8;padding:12px;margin:14px 0}
+a{color:#145b89}
+</style></head><body><main class="card">
+<h2>Personal Record Verification</h2>
+<div class="notice"><b>Demonstration record copy only.</b> This page does not establish an official international vaccination certificate or replace verification with the issuing vaccination center.</div>
+{% if not cert %}
+<div class="status">NOT FOUND</div><p>No matching demonstration record was found.</p>
+{% else %}
+<div class="status">RECORD FOUND — {{ cert.status }}</div>
+<h3>Traveler Information</h3><div class="grid">
+{% for label, value in [('Traveler ID', cert.cert_no),('Full Name', cert.recipient),('Date of Birth', cert.dob),('Sex', cert.sex),('Nationality', cert.nationality),('Organization', cert.organization),('Record Date', cert.issue_date)] %}
+<div class="item"><div class="label">{{ label }}</div><div class="value">{{ value or 'Not recorded' }}</div></div>{% endfor %}
+</div>
+<h3>Vaccination Details</h3><div class="grid">
+{% for title, prefix in [('Yellow Fever','yellow_fever'),('Oral Polio Vaccine','oral_polio'),('Meningococcal ACYW135','meningococcal')] %}
+<div class="item"><b>{{ title }}</b>
+<div class="label">Vaccine type</div><div class="value">{{ cert[prefix + '_type'] or 'Not recorded' }}</div>
+<div class="label">Manufacturer</div><div class="value">{{ cert[prefix + '_manufacturer'] or 'Not recorded' }}</div>
+<div class="label">Batch number</div><div class="value">{{ cert[prefix + '_batch_no'] or 'Not recorded' }}</div>
+<div class="label">Vaccination date</div><div class="value">{{ cert[prefix + '_date'] or 'Not recorded' }}</div>
+</div>{% endfor %}
+</div>
+<p><a href="{{ url_for('certificate_pdf', token=cert.token) }}">Download personal record PDF</a></p>
+{% endif %}
+</main></body></html>
