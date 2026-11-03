@@ -10,10 +10,20 @@ from reportlab.lib import colors
 from reportlab.lib.utils import ImageReader
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.environ.get("DATABASE_PATH", os.path.join(APP_DIR, "certificates.db"))
+DB_PATH = os.environ.get(
+    "DATABASE_PATH",
+    os.path.join(APP_DIR, "certificates.db")
+)
+
 app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY", "CHANGE-THIS-TO-A-LONG-RANDOM-SECRET")
-app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax")
+app.secret_key = os.environ.get(
+    "SECRET_KEY",
+    "CHANGE-THIS-TO-A-LONG-RANDOM-SECRET"
+)
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax"
+)
 
 def db():
     conn = sqlite3.connect(DB_PATH)
