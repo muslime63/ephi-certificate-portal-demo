@@ -1,3 +1,4 @@
+
 @app.route("/verify/<token>")
 def verify(token):
     with db() as con:
@@ -15,7 +16,10 @@ def verify(token):
     return render_template(
         "verify.html",
         cert=cert
-    )@app.route("/certificate/<token>.pdf")
+    )
+
+
+@app.route("/certificate/<token>.pdf")
 def certificate_pdf(token):
     from reportlab.lib.units import cm
     from flask import url_for
@@ -193,11 +197,7 @@ def certificate_pdf(token):
     c.setFillColor(colors.HexColor("#174a6e"))
     c.setFont("Helvetica-Bold", 7)
 
-    c.drawString(
-        link_x,
-        link_y,
-        link_text
-    )
+    c.drawString(link_x, link_y, link_text)
 
     text_width = c.stringWidth(
         link_text,
