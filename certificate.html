@@ -1,123 +1,42 @@
-            position: absolute; right: 0px; top: 110px; width: 65px; height: 65px;
-            border: 1px solid #000; background: white; display: flex; justify-content: center; align-items: center;
-        }
-        .qr-box img { width: 90%; height: 90%; }
-        .btn-pdf {
-            background-color: #28a745; color: white; padding: 10px 20px;
-            border: none; border-radius: 4px; font-weight: bold; cursor: pointer; margin-top: 15px;
-        }
-
-        @media print {
-            .admin-panel, .btn-pdf, .btn-generate { display: none; }
-            body { background: white; padding: 0; }
-            #certificate-area { display: block; }
-            .certificate-card { box-shadow: none; }
-        }
-    </style>
-</head>
-<body>
-
-<!-- ADMIN DATA ENTRY FORM -->
-<div class="admin-panel">
-    <h2>EPHI Admin - Issue New Certificate</h2>
-    <div class="form-group">
-        <label>Full Name</label>
-        <input type="text" id="form-name" placeholder="e.g. Misganu Feyisa Mamo">
-    </div>
-    <div class="form-group">
-        <label>Country / Nationality</label>
-        <input type="text" id="form-country" value="Ethiopia">
-    </div>
-    <div class="form-group">
-        <label>Date of Birth</label>
-        <input type="date" id="form-dob">
-    </div>
-    <div class="form-group">
-        <label>Sex</label>
-        <select id="form-sex">
-            <option value="Male">Male</option>
-            <option value="Female">Female</option>
-        </select>
-    </div>
-    <div class="form-group">
-        <label>Passport Number</label>
-        <input type="text" id="form-passport" placeholder="e.g. EP000000">
-    </div>
-    <div class="form-group">
-        <label>Vaccine Type</label>
-        <select id="form-vaccine">
-            <option value="Yellow Fever">Yellow Fever</option>
-            <option value="Oral Polio Vaccine">Oral Polio Vaccine</option>
-            <option value="Meningococcal A,C,Y,W135">Meningococcal A,C,Y,W135</option>
-        </select>
-    </div>
-    <div class="form-group">
-        <label>Date of Vaccination</label>
-        <input type="date" id="form-vac-date">
-    </div>
-    <div class="form-group">
-        <label>Manufacturer & Batch Number</label>
-        <input type="text" id="form-batch" placeholder="e.g. Chumakov Institute / Batch: 584">
-    </div>
-    <button class="btn-generate" onclick="generateCertificate()">GENERATE CERTIFICATE & QR</button>
-</div>
-
-<!-- GENERATED CERTIFICATE REGION (Qulqulluu) -->
-<div id="certificate-area">
-    <div class="certificate-card">
-        <div class="top-panel">
-            <div class="left-instructions">
-                <h3>Information for travelers</h3>
-                <p>This digital certificate serves as official proof of an individual's travel vaccination status including Yellow Fever vaccination, as required under the International Health Regulations (IHR 2005).</p>
-                <p>According to IHR guidelines, the Certificate of Vaccination against Yellow Fever becomes valid 10 days after the date of vaccination and remains valid for the lifetime of the vaccinated individual.</p>
-                <p>To obtain a new digital copy of your certificate or to verify its authenticity, visit ephi.gov.et and follow the instructions.</p>
-            </div>
-            
-            <div class="right-agency-header">
-                <div class="logo-container">
-                    <img class="logo-img" src="https://wikimedia.org" alt="Emblem">
-                </div>
-                <div class="gov-main-title">FEDERAL DEMOCRATIC REPUBLIC OF ETHIOPIA</div>
-                <div class="ministry-sub-title">MINISTRY OF HEALTH<br>ETHIOPIAN PUBLIC HEALTH INSTITUTE</div>
-                <div class="doc-title-main">International Certificate of Vaccination or Prophylaxis</div>
-                <div class="traveler-id-block">Traveler ID: <span style="border-bottom:1px dotted #000;" id="cert-id"></span></div>
-                
-                <div class="qr-box" id="cert-qr"></div>
             </div>
         </div>
+    </div>
 
-        <div class="bottom-panel">
-            <div class="center-cert-heading">INTERNATIONAL CERTIFICATE OF VACCINATION OR PROPHYLAXIS</div>
-            <div class="cert-statement">
-                This is to certify that <span class="inline-fill" id="cert-name" style="width:230px;"></span> whose signature follows <span class="inline-fill" style="width:120px;"></span><br>
-                date of birth <span class="inline-fill" id="cert-dob" style="width:80px;"></span> sex <span class="inline-fill" id="cert-sex" style="width:60px;"></span> nationality of <span class="inline-fill" id="cert-country" style="width:100px;"></span><br>
-                passport number <span class="inline-fill" id="cert-passport" style="width:100px;"></span> has been vaccinated in accordance with the IHR(2005).
-            </div>
+    <div class="bottom-panel">
+        <div class="center-cert-heading">INTERNATIONAL CERTIFICATE OF VACCINATION OR PROPHYLAXIS</div>
+        <div class="cert-statement">
+            This is to certify that <span class="inline-fill" style="width:230px;">{{ record.full_name }}</span> whose signature follows <span class="inline-fill" style="width:120px;"></span><br>
+            date of birth <span class="inline-fill" style="width:80px;">{{ record.date_of_birth }}</span> sex <span class="inline-fill" style="width:60px;">{{ record.sex }}</span> nationality of <span class="inline-fill" style="width:100px;">{{ record.nationality }}</span><br>
+            passport number <span class="inline-fill" style="width:100px;">{{ record.passport_number }}</span> has been vaccinated in accordance with the IHR(2005).
+        </div>
 
-            <table class="vaccine-table">
-                <thead>
-                    <tr>
-                        <th>Date of Vaccination</th>
-                        <th>Vaccine Type</th>
-                        <th>Manufacturer and Batch No.</th>
-                        <th>Signature / Stamp</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td id="table-date"></td>
-                        <td id="table-type"></td>
-                        <td id="table-batch"></td>
-                        <td style="text-align:center;">✍️ [EPHI Verified]</td>
-                    </tr>
-                </tbody>
-            </table>
+        <table class="vaccine-table">
+            <thead>
+                <tr>
+                    <th>Vaccine</th>
+                    <th>Manufacturer</th>
+                    <th>Batch No.</th>
+                    <th>Vaccination Date</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Galmee talaallii hunda gabateetti naquuf loops -->
+                {% for vac in record.vaccinations %}
+                <tr>
+                    <td>{{ vac.vaccine }}</td>
+                    <td>{{ vac.manufacturer }}</td>
+                    <td>{{ vac.batch_no }}</td>
+                    <td>{{ vac.vaccination_date }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        
+        <div class="auth-footer">
+            Authorized by: <span class="inline-fill" style="width: 150px; margin-left: 5px;">{{ record.authorized_by }}</span>
         </div>
     </div>
-    <center><button class="btn-pdf" onclick="window.print()">DOWNLOAD CERTIFICATE (PDF)</button></center>
 </div>
 
-<script>
-function generateCertificate() {
-    const name = document.getElementById("form-name").value;
-    const country = document.getElementById("form-country").value;
+</body>
+</html>
