@@ -1,246 +1,283 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EPHI Admin Dashboard</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EPHI Admin Dashboard</title>
 
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background: #f1f5f9;
-            margin: 0;
-            padding: 20px;
-            color: #1e293b;
-        }
+<style>
+* { box-sizing: border-box; }
 
-        .container {
-            max-width: 1000px;
-            margin: auto;
-        }
+body {
+    font-family: Arial, sans-serif;
+    background: #f1f5f9;
+    margin: 0;
+    padding: 20px;
+    color: #1e293b;
+}
 
-        header {
-            background: #123b59;
-            color: white;
-            padding: 22px;
-            border-radius: 10px;
-            margin-bottom: 20px;
-        }
+.container {
+    max-width: 1200px;
+    margin: auto;
+}
 
-        .stats {
-            display: flex;
-            gap: 15px;
-            flex-wrap: wrap;
-            margin-bottom: 20px;
-        }
+header {
+    background: linear-gradient(135deg,#123b59,#176b50);
+    color: white;
+    padding: 25px;
+    border-radius: 14px;
+    margin-bottom: 22px;
+    box-shadow: 0 4px 12px #0002;
+}
 
-        .card {
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
-            flex: 1;
-            min-width: 130px;
-            box-shadow: 0 2px 6px #0001;
-        }
+header h1 { margin: 0 0 8px; }
+header p { margin: 5px 0; }
 
-        .card h2 {
-            color: #123b59;
-            margin-bottom: 5px;
-        }
+.stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit,minmax(180px,1fr));
+    gap: 16px;
+    margin-bottom: 22px;
+}
 
-        .actions {
-            margin-bottom: 20px;
-        }
+.card {
+    background: white;
+    padding: 22px;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px #0001;
+    border-left: 5px solid #176b50;
+}
 
-        a, button {
-            display: inline-block;
-            background: #176b50;
-            color: white;
-            padding: 11px 16px;
-            border: none;
-            border-radius: 6px;
-            text-decoration: none;
-            cursor: pointer;
-            margin: 4px;
-        }
+.card p { color: #64748b; margin: 0; }
+.card h2 { color: #123b59; font-size: 28px; margin: 10px 0 0; }
 
-        .pdf-button {
-            background: #123b59;
-        }
+.toolbar {
+    background: white;
+    padding: 16px;
+    border-radius: 12px;
+    margin-bottom: 22px;
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+}
 
-        .logout {
-            background: #b42318;
-        }
+a, button {
+    display: inline-block;
+    background: #176b50;
+    color: white;
+    padding: 11px 15px;
+    border: none;
+    border-radius: 7px;
+    text-decoration: none;
+    cursor: pointer;
+    font-size: 13px;
+    margin: 3px;
+}
 
-        input {
-            padding: 11px;
-            border: 1px solid #ccc;
-            border-radius: 6px;
-            max-width: 250px;
-        }
+a:hover, button:hover { opacity: .85; }
 
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            background: white;
-            border-radius: 8px;
-            overflow: hidden;
-        }
+.search-button { background: #123b59; }
+.pdf-button { background: #123b59; }
+.logout { background: #b42318; }
+.view-button { background: #64748b; }
+.create-button { background: #176b50; }
 
-        th, td {
-            padding: 12px;
-            border-bottom: 1px solid #ddd;
-            text-align: left;
-        }
+input {
+    padding: 12px;
+    border: 1px solid #cbd5e1;
+    border-radius: 7px;
+    min-width: 220px;
+    max-width: 100%;
+}
 
-        th {
-            background: #123b59;
-            color: white;
-        }
+.section-title {
+    margin: 25px 0 14px;
+    color: #123b59;
+}
 
-        .valid {
-            color: green;
-            font-weight: bold;
-        }
+.table-wrap {
+    overflow-x: auto;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px #0001;
+}
 
-        .revoked {
-            color: red;
-            font-weight: bold;
-        }
+table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 750px;
+}
 
-        .empty {
-            background: white;
-            padding: 25px;
-            text-align: center;
-        }
+th, td {
+    padding: 14px;
+    border-bottom: 1px solid #e2e8f0;
+    text-align: left;
+}
 
-        @media(max-width:600px) {
-            table {
-                font-size: 12px;
-            }
+th {
+    background: #123b59;
+    color: white;
+    font-size: 13px;
+}
 
-            th, td {
-                padding: 7px;
-            }
+tr:hover { background: #f8fafc; }
 
-            a {
-                padding: 8px 10px;
-                font-size: 11px;
-            }
-        }
-    </style>
+.valid {
+    color: #15803d;
+    background: #dcfce7;
+    padding: 5px 9px;
+    border-radius: 20px;
+    font-weight: bold;
+    font-size: 12px;
+}
+
+.revoked {
+    color: #b91c1c;
+    background: #fee2e2;
+    padding: 5px 9px;
+    border-radius: 20px;
+    font-weight: bold;
+    font-size: 12px;
+}
+
+.empty {
+    background: white;
+    padding: 35px;
+    text-align: center;
+    border-radius: 12px;
+}
+
+.footer-note {
+    text-align: center;
+    color: #64748b;
+    font-size: 12px;
+    margin-top: 25px;
+}
+
+@media(max-width:600px) {
+    body { padding: 10px; }
+    header { padding: 18px; }
+    header h1 { font-size: 22px; }
+    .toolbar { align-items: stretch; }
+    .toolbar form { width: 100%; }
+    input { width: 100%; min-width: 0; }
+    .toolbar a, .toolbar button { text-align: center; }
+}
+</style>
 </head>
 
 <body>
 <div class="container">
 
-    <header>
-        <h1>EPHI Certificate Portal</h1>
-        <p>Administration Dashboard</p>
-        <p>Welcome, {{ session.get('username', 'Admin') }}</p>
-    </header>
+<header>
+    <h1>EPHI Certificate Portal</h1>
+    <p>Administration Dashboard</p>
+    <p>Welcome, {{ session.get('username', 'Admin') }}</p>
+</header>
 
-    <div class="stats">
-        <div class="card">
-            <p>Total Certificates</p>
-            <h2>{{ total }}</h2>
-        </div>
-
-        <div class="card">
-            <p>Valid Certificates</p>
-            <h2>{{ valid }}</h2>
-        </div>
+<div class="stats">
+    <div class="card">
+        <p>Total Records</p>
+        <h2>{{ total }}</h2>
     </div>
 
-    <div class="actions">
+    <div class="card">
+        <p>Valid Records</p>
+        <h2>{{ valid }}</h2>
+    </div>
 
-        <a href="{{ url_for('issue') }}">
-            + Issue New Certificate
+    <div class="card">
+        <p>Displayed Records</p>
+        <h2>{{ certificates|length }}</h2>
+    </div>
+</div>
+
+<div class="toolbar">
+
+    <a class="create-button" href="{{ url_for('issue') }}">
+        + Create New Record
+    </a>
+
+    <form method="GET" action="{{ url_for('admin') }}">
+        <input type="text"
+               name="q"
+               placeholder="Search name or record number"
+               value="{{ q }}">
+        <button class="search-button" type="submit">Search</button>
+    </form>
+
+    <form method="POST" action="{{ url_for('logout') }}">
+        <button class="logout" type="submit">Logout</button>
+    </form>
+
+</div>
+
+<h2 class="section-title">Personal Vaccination Records</h2>
+
+{% if certificates %}
+
+<div class="table-wrap">
+<table>
+<thead>
+<tr>
+    <th>Record Number</th>
+    <th>Recipient</th>
+    <th>Record Title</th>
+    <th>Issue Date</th>
+    <th>Status</th>
+    <th>Actions</th>
+</tr>
+</thead>
+
+<tbody>
+{% for cert in certificates %}
+<tr>
+    <td>{{ cert['cert_no'] }}</td>
+    <td>{{ cert['recipient'] }}</td>
+    <td>{{ cert['title'] }}</td>
+    <td>{{ cert['issue_date'] }}</td>
+
+    <td>
+        {% if cert['status'] == 'VALID' %}
+            <span class="valid">VALID</span>
+        {% else %}
+            <span class="revoked">{{ cert['status'] }}</span>
+        {% endif %}
+    </td>
+
+    <td>
+        <a class="view-button"
+           href="{{ url_for('certificate_detail', token=cert['token']) }}">
+           View
         </a>
 
-        <form method="GET"
-              action="{{ url_for('admin') }}"
-              style="display:inline-block;">
+        <a class="pdf-button"
+           href="{{ url_for('certificate_pdf', token=cert['token']) }}"
+           target="_blank">
+           Generate / Download PDF
+        </a>
+    </td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
 
-            <input type="text"
-                   name="q"
-                   placeholder="Search name or certificate number"
-                   value="{{ q }}">
+{% else %}
 
-            <button type="submit">Search</button>
-        </form>
+<div class="empty">
+    <h3>No records found</h3>
+    <p>Create a new personal vaccination record to get started.</p>
+    <a href="{{ url_for('issue') }}">Create New Record</a>
+</div>
 
-        <form method="POST"
-              action="{{ url_for('logout') }}"
-              style="display:inline-block;">
+{% endif %}
 
-            <button class="logout" type="submit">
-                Logout
-            </button>
-        </form>
-
-    </div>
-
-    <h2>Certificate Records</h2>
-
-    {% if certificates %}
-
-    <table>
-        <thead>
-            <tr>
-                <th>Certificate No.</th>
-                <th>Recipient</th>
-                <th>Certificate Title</th>
-                <th>Issue Date</th>
-                <th>Status</th>
-                <th>Action</th>
-            </tr>
-        </thead>
-
-        <tbody>
-
-        {% for cert in certificates %}
-
-            <tr>
-                <td>{{ cert['cert_no'] }}</td>
-
-                <td>{{ cert['recipient'] }}</td>
-
-                <td>{{ cert['title'] }}</td>
-
-                <td>{{ cert['issue_date'] }}</td>
-
-                <td class="{{ 'valid' if cert['status'] == 'VALID' else 'revoked' }}">
-                    {{ cert['status'] }}
-                </td>
-
-                <td>
-                    <a href="{{ url_for('certificate_detail', token=cert['token']) }}">
-                        View
-                    </a>
-
-                    <a class="pdf-button"
-                       href="{{ url_for('certificate_pdf', token=cert['token']) }}"
-                       target="_blank">
-                        Download PDF
-                    </a>
-                </td>
-            </tr>
-
-        {% endfor %}
-
-        </tbody>
-    </table>
-
-    {% else %}
-
-    <div class="empty">
-        <h3>No certificates found</h3>
-        <p>Issue your first certificate using the button above.</p>
-    </div>
-
-    {% endif %}
+<div class="footer-note">
+    Personal Vaccination Records – Demonstration Portal.
+    Not an official international travel certificate.
+</div>
 
 </div>
 </body>
