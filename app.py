@@ -106,8 +106,39 @@ def certificate_pdf(token):
     c.setFont("Helvetica-Bold", 8)
     c.drawString(w - 145, 35, "TRAVELER ID QR")
 
+    # Separate clickable verification link
+    verify_link = verification_url(token)
+
+    c.setFillColor(colors.HexColor("#174a6e"))
+    c.setFont("Helvetica-Bold", 9)
+
+    link_text = "OPEN DEMO RECORD VERIFICATION"
+    link_x = 48
+    link_y = 85
+
+    c.drawString(link_x, link_y, link_text)
+
+    text_width = c.stringWidth(
+        link_text, "Helvetica-Bold", 9
+    )
+
+    c.linkURL(
+        verify_link,
+        (
+            link_x,
+            link_y - 3,
+            link_x + text_width,
+            link_y + 12
+        ),
+        relative=0
+    )
+
+    c.setFillColor(colors.black)
     c.setFont("Helvetica", 7)
-    c.drawString(48, 55, "Demonstration personal record only.")
+    c.drawString(
+        48, 55,
+        "Demonstration personal record only."
+    )
     c.drawString(
         48, 43,
         "Not valid as an official travel or international vaccination certificate."
