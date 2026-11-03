@@ -1,337 +1,198 @@
+import os, io, sqlite3, secrets
+from datetime import datetime, date
+from functools import wraps
+from flask import Flask, render_template, request, redirect, url_for, session, flash, send_file, abort
+from werkzeug.security import generate_password_hash, check_password_hash
+import qrcode
+from reportlab.lib.pagesizes import A4, landscape
+from reportlab.pdfgen import canvas
+from reportlab.lib import colors
+from reportlab.lib.utils import ImageReader
+
+APP_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.environ.get("DATABASE_PATH", os.path.join(APP_DIR, "certificates.db"))
+app = Flask(__name__)
+app.secret_key = os.environ.get("SECRET_KEY", "CHANGE-THIS-TO-A-LONG-RANDOM-SECRET")
+app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax")
+
+def db():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+def init_db():
+    with db() as con:
+        con.execute("""CREATE TABLE IF NOT EXISTS admins (
+            id INTEGER PRIMARY KEY, username TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL)""")
+        con.execute("""CREATE TABLE IF NOT EXISTS certificates (
+            id INTEGER PRIMARY KEY, cert_no TEXT UNIQUE NOT NULL, token TEXT UNIQUE NOT NULL,
+            recipient TEXT NOT NULL, title TEXT NOT NULL, organization TEXT NOT NULL,
+            issue_date TEXT NOT NULL, expiry_date TEXT, signatory TEXT, status TEXT NOT NULL DEFAULT 'VALID',
+            created_at TEXT NOT NULL)""")
+        username = os.environ.get("ADMIN_USERNAME", "admin")
+        password = os.environ.get("ADMIN_PASSWORD")
+        if password and not con.execute("SELECT id FROM admins WHERE username=?", (username,)).fetchone():
+            con.execute("INSERT INTO admins(username,password_hash) VALUES(?,?)",
+                        (username, generate_password_hash(password)))
+
+def login_required(fn):
+    @wraps(fn)
+    def wrapped(*args, **kwargs):
+        if not session.get("admin_id"):
+            return redirect(url_for("login"))
+        return fn(*args, **kwargs)
+    return wrapped
+
+def verification_url(token):
+    return url_for("verify", token=token, _external=True)
+
+@app.route("/")
+def home():
+    return render_template("home.html")
+
+@app.route("/verify/<token>")
+def verify(token):
+    with db() as con:
+        cert = con.execute("SELECT * FROM certificates WHERE token=?", (token,)).fetchone()
+    return render_template("verify.html", cert=cert)
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+        with db() as con:
+            admin = con.execute("SELECT * FROM admins WHERE username=?", (username,)).fetchone()
+        if admin and check_password_hash(admin["password_hash"], password):
+            session.clear()
+            session["admin_id"] = admin["id"]
+            session["username"] = admin["username"]
+            return redirect(url_for("dashboard"))
+        flash("Invalid username or password.", "error")
+    return render_template("login.html")
+
+@app.route("/logout", methods=["POST"])
+def logout():
+    session.clear()
+    return redirect(url_for("home"))
+
+@app.route("/admin")
+@login_required
+def dashboard():
+    q = request.args.get("q", "").strip()
+    with db() as con:
+        if q:
+            rows = con.execute("""SELECT * FROM certificates WHERE recipient LIKE ? OR cert_no LIKE ?
+                ORDER BY id DESC LIMIT 100""", (f"%{q}%", f"%{q}%")).fetchall()
+        else:
+            rows = con.execute("SELECT * FROM certificates ORDER BY id DESC LIMIT 100").fetchall()
+        total = con.execute("SELECT COUNT(*) FROM certificates").fetchone()[0]
+        valid = con.execute("SELECT COUNT(*) FROM certificates WHERE status='VALID'").fetchone()[0]
+    return render_template("dashboard.html", certificates=rows, total=total, valid=valid, q=q)
+
+@app.route("/admin/issue", methods=["GET", "POST"])
+@login_required
+def issue():
+    if request.method == "POST":
+        recipient = request.form.get("recipient", "").strip()
+        title = request.form.get("title", "").strip()
+        organization = request.form.get("organization", "Ethiopian Public Health Institute").strip()
+        issue_date = request.form.get("issue_date", "").strip()
+        expiry_date = request.form.get("expiry_date", "").strip() or None
+        signatory = request.form.get("signatory", "").strip()
+        # Always generate a unique random ID: 4 uppercase letters + 6 digits.
+        alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        cert_no = ""
+        with db() as con:
+            for _ in range(100):
+                candidate = "".join(secrets.choice(alphabet) for _ in range(4))
+                candidate += "".join(secrets.choice("0123456789") for _ in range(6))
+                if not con.execute(
+                    "SELECT 1 FROM certificates WHERE cert_no=?", (candidate,)
+                ).fetchone():
+                    cert_no = candidate
+                    break
+        if not cert_no:
+            flash("Could not generate a unique ID. Please try again.", "error")
+            return render_template("issue.html")
+        if not recipient or not title or not issue_date:
+            flash("Recipient name, certificate title and issue date are required.", "error")
+            return render_template("issue.html")
+        token = secrets.token_urlsafe(24)
+        try:
+            with db() as con:
+                con.execute("""INSERT INTO certificates(cert_no,token,recipient,title,organization,issue_date,expiry_date,signatory,status,created_at)
+                    VALUES(?,?,?,?,?,?,?,?,?,?)""",
+                    (cert_no, token, recipient, title, organization, issue_date, expiry_date, signatory, "VALID", datetime.utcnow().isoformat()))
+            flash("Certificate issued successfully.", "success")
+            return redirect(url_for("certificate_detail", token=token))
+        except sqlite3.IntegrityError:
+            flash("That certificate number already exists. Choose another number.", "error")
+    return render_template("issue.html")
+
+@app.route("/admin/certificate/<token>")
+@login_required
+def certificate_detail(token):
+    with db() as con:
+        cert = con.execute("SELECT * FROM certificates WHERE token=?", (token,)).fetchone()
+    if not cert: abort(404)
+    return render_template("detail.html", cert=cert, verify_url=verification_url(token))
+
+@app.route("/admin/certificate/<token>/revoke", methods=["POST"])
+@login_required
+def revoke(token):
+    with db() as con:
+        con.execute("UPDATE certificates SET status='REVOKED' WHERE token=?", (token,))
+    flash("Certificate status updated to REVOKED.", "success")
+    return redirect(url_for("certificate_detail", token=token))
 
 @app.route("/certificate/<token>.pdf")
-@login_required
 def certificate_pdf(token):
-    certificate, vaccinations = get_record(token)
-
-    if not certificate:
-        abort(404)
-
-    buffer = io.BytesIO()
-    pdf = canvas.Canvas(buffer, pagesize=A4)
-    width, height = A4
-
-    pdf.setTitle("Vaccination Record Copy")
-
-    YELLOW = (1.0, 0.91, 0.25)
-    DARK = (0.08, 0.20, 0.30)
-    WHITE = (1, 1, 1)
-
-    def background():
-        pdf.setFillColorRGB(*YELLOW)
-        pdf.rect(0, 0, width, height, fill=1, stroke=0)
-
-        pdf.setStrokeColorRGB(*DARK)
-        pdf.setLineWidth(1.5)
-        pdf.rect(22, 22, width - 44, height - 44,
-                 fill=0, stroke=1)
-
-    def text(x, y, value, size=10, bold=False):
-        pdf.setFillColorRGB(*DARK)
-        font = "Helvetica-Bold" if bold else "Helvetica"
-        pdf.setFont(font, size)
-        pdf.drawString(x, y, str(value or "-")[:100])
-
-    def heading(value, y):
-        pdf.setFillColorRGB(*DARK)
-        pdf.setFont("Helvetica-Bold", 13)
-        pdf.drawCentredString(width / 2, y, value)
-
-    def page_title(title, subtitle):
-        pdf.setFillColorRGB(*DARK)
-        pdf.setFont("Helvetica-Bold", 18)
-        pdf.drawCentredString(width / 2, height - 65, title)
-
-        pdf.setFont("Helvetica-Bold", 9)
-        pdf.drawCentredString(width / 2, height - 85, subtitle)
-
-        pdf.setStrokeColorRGB(*DARK)
-        pdf.line(40, height - 105, width - 40, height - 105)
-
-    verification_url = url_for(
-        "verify",
-        token=certificate["token"],
-        _external=True
-    )
-
-
-    text(
-        45, height - 170,
-        "This document is a copy of vaccination information saved in the portal.",
-        8
-    )
-    text(
-        45, height - 187,
-        "It is not a government-issued or WHO International Certificate.",
-        8
-    )
-    text(
-        45, height - 204,
-        "For official travel requirements, contact an authorized health authority.",
-        8
-    )
-
-    pdf.line(40, height - 225, width - 40, height - 225)
-
-    heading("RECIPIENT INFORMATION", height - 255)
-
-    details = [
-        ("Record Number", certificate.get("cert_no")),
-        ("Traveler ID", certificate.get("traveler_id")),
-        ("Full Name", certificate.get("recipient")),
-        ("Date of Birth", certificate.get("dob")),
-        ("Sex", certificate.get("sex")),
-        ("Nationality", certificate.get("nationality")),
-        ("Organization", certificate.get("organization")),
-        ("Issue Date", certificate.get("issue_date")),
-        ("Supervising Clinician",
-         certificate.get("supervising_clinician")),
-        ("Authorized By", certificate.get("authorized_by")),
-        ("Record Status", certificate.get("status"))
-    ]
-
-    y = height - 290
-
-    for label, value in details:
-        text(55, y, label + ":", 9, True)
-        text(220, y, value, 9)
-        y -= 22
-
-    # QR code for online verification
-    qr_image = qrcode.make(verification_url)
-    qr_buffer = io.BytesIO()
-    qr_image.save(qr_buffer, format="PNG")
-    qr_buffer.seek(0)
-
-    pdf.drawImage(
-        ImageReader(qr_buffer),
-        width - 125, 65,
-        width=75, height=75
-    )
-
-    text(45, 100, "Online record verification:", 8, True)
-    text(45, 84, verification_url, 6)
-
-    pdf.setFillColorRGB(*DARK)
-    pdf.setFont("Helvetica-Bold", 8)
-    pdf.drawCentredString(
-        width / 2, 40,
-        "DEMO / RECORD COPY - NOT VALID FOR INTERNATIONAL TRAVEL"
-    )
-
-    pdf.showPage()
-
-    # ---------------------------------
-    # PAGE 2 AND EXTRA PAGES:
-    # VACCINATION DETAILS
-    # ---------------------------------
-
-    columns = [
-        ("Date of Vaccination", 105),
-        ("Vaccine Type", 125),
-        ("Manufacturer", 115),
-        ("Batch Number", 95)
-    ]
-
-    table_x = 35
-    table_width = sum(col[1] for col in columns)
-    row_height = 32
-
-    # Split vaccine records into groups of 9
-    vaccine_list = list(vaccinations or [])
-    chunks = [
-        vaccine_list[i:i + 9]
-        for i in range(0, len(vaccine_list), 9)
-    ]
-
-    if not chunks:
-        chunks = [[]]
-
-    for page_index, vaccine_chunk in enumerate(chunks):
-
-        background()
-
-        page_title(
-            "VACCINATION DETAILS",
-            "PERSONAL VACCINATION RECORD - DEMO COPY"
-        )
-
-        text(
-            45, height - 135,
-            "Recipient: " + str(
-                certificate.get("recipient") or "-"
-            ),
-            10, True
-        )
-
-        text(
-            45, height - 155,
-            "Record Number: " + str(
-                certificate.get("cert_no") or "-"
-            ),
-            9
-        )
-
-        text(
-            45, height - 175,
-            "Traveler ID: " + str(
-                certificate.get("traveler_id") or "-"
-            ),
-            9
-        )
-
-        if page_index > 0:
-            text(
-                45, height - 195,
-                "Additional vaccination records",
-                9, True
-            )
-
-        table_top = height - 220
-
-        # Table header
-        pdf.setFillColorRGB(*DARK)
-        pdf.rect(
-            table_x,
-            table_top - row_height,
-            table_width,
-            row_height,
-            fill=1,
-            stroke=1
-        )
-
-        x = table_x
-
-        for label, col_width in columns:
-            pdf.setFillColorRGB(*WHITE)
-            pdf.setFont("Helvetica-Bold", 7)
-
-            pdf.drawCentredString(
-                x + col_width / 2,
-                table_top - 19,
-                label
-            )
-
-            x += col_width
-
-        # Vaccine records
-        y = table_top - row_height
-
-        for vaccine in vaccine_chunk:
-            y -= row_height
-
-            pdf.setFillColorRGB(*YELLOW)
-            pdf.rect(
-                table_x,
-                y,
-                table_width,
-                row_height,
-                fill=1,
-                stroke=1
-            )
-
-            values = [
-                vaccine.get("vaccination_date"),
-                vaccine.get("vaccine_type"),
-                vaccine.get("manufacturer"),
-                vaccine.get("batch_no")
-            ]
-
-            x = table_x
-
-            for index, (_, col_width) in enumerate(columns):
-                pdf.setStrokeColorRGB(*DARK)
-                pdf.line(x, y, x, y + row_height)
-
-                pdf.setFillColorRGB(*DARK)
-                pdf.setFont("Helvetica", 7)
-
-                value = str(values[index] or "-")[:24]
-
-                pdf.drawCentredString(
-                    x + col_width / 2,
-                    y + 12,
-                    value
-                )
-
-                x += col_width
-
-            pdf.line(x, y, x, y + row_height)
-
-        # Authorization details on final page only
-        if page_index == len(chunks) - 1:
-
-            auth_y = y - 55
-
-            text(45, auth_y, "Authorized By:", 9, True)
-            text(
-                150, auth_y,
-                certificate.get("authorized_by"),
-                9
-            )
-
-            auth_y -= 28
-
-            text(
-                45, auth_y,
-                "Supervising Clinician:",
-                9, True
-            )
-
-            text(
-                190, auth_y,
-                certificate.get("supervising_clinician"),
-                9
-            )
-
-            auth_y -= 45
-
-            pdf.setStrokeColorRGB(*DARK)
-            pdf.line(45, auth_y, width - 45, auth_y)
-
-            pdf.setFont("Helvetica-Bold", 9)
-            pdf.drawCentredString(
-                width / 2,
-                auth_y - 23,
-                "DEMO / RECORD COPY - NOT AN OFFICIAL CERTIFICATE"
-            )
-
-            pdf.setFont("Helvetica", 8)
-            pdf.drawCentredString(
-                width / 2,
-                auth_y - 40,
-                "Verify saved record using the QR code on page 1."
-            )
-
-        pdf.showPage()
-
-    pdf.save()
-    buffer.seek(0)
-
-    return send_file(
-        buffer,
-        as_attachment=True,
-        download_name=f"{certificate.get('cert_no', 'record')}.pdf",
-        mimetype="application/pdf"
-    )
-import secrets
-import string
-
-def generate_traveler_id(existing_ids=None):
-    existing_ids = existing_ids or set()
-
-    while True:
-        letters = ''.join(
-            secrets.choice(string.ascii_uppercase)
-            for _ in range(4)
-        )
-
-        numbers = ''.join(
-            secrets.choice(string.digits)
-            for _ in range(6)
-        )
-
-        traveler_id = letters + numbers
-
-        if traveler_id not in existing_ids:
-            return traveler_id
+    with db() as con:
+        cert = con.execute("SELECT * FROM certificates WHERE token=?", (token,)).fetchone()
+    if not cert: abort(404)
+    verify = verification_url(token)
+    qr = qrcode.make(verify)
+    qr_io = io.BytesIO()
+    qr.save(qr_io, format="PNG")
+    qr_io.seek(0)
+    buff = io.BytesIO()
+    page = landscape(A4)
+    c = canvas.Canvas(buff, pagesize=page)
+    w, h = page
+    c.setFillColor(colors.HexColor("#f8fafc")); c.rect(0,0,w,h,fill=1,stroke=0)
+    c.setStrokeColor(colors.HexColor("#174a6e")); c.setLineWidth(5); c.rect(24,24,w-48,h-48,fill=0,stroke=1)
+    c.setStrokeColor(colors.HexColor("#c49a42")); c.setLineWidth(1.5); c.rect(34,34,w-68,h-68,fill=0,stroke=1)
+    c.setFillColor(colors.HexColor("#123b59")); c.setFont("Helvetica-Bold", 22)
+    c.drawCentredString(w/2, h-88, cert["organization"].upper())
+    c.setFillColor(colors.HexColor("#9a7428")); c.setFont("Helvetica-Bold", 15)
+    c.drawCentredString(w/2, h-125, "CERTIFICATE OF ACHIEVEMENT")
+    c.setFillColor(colors.HexColor("#334155")); c.setFont("Helvetica", 13)
+    c.drawCentredString(w/2, h-174, "This certificate is proudly presented to")
+    c.setFillColor(colors.HexColor("#123b59")); c.setFont("Helvetica-Bold", 27)
+    c.drawCentredString(w/2, h-218, cert["recipient"])
+    c.setFillColor(colors.HexColor("#334155")); c.setFont("Helvetica", 13)
+    c.drawCentredString(w/2, h-255, "for successfully completing / receiving")
+    c.setFillColor(colors.HexColor("#123b59")); c.setFont("Helvetica-Bold", 18)
+    c.drawCentredString(w/2, h-285, cert["title"])
+    c.setFillColor(colors.HexColor("#475569")); c.setFont("Helvetica", 10)
+    c.drawString(75, 105, f"Certificate No: {cert['cert_no']}")
+    c.drawString(75, 85, f"Issue date: {cert['issue_date']}")
+    if cert["expiry_date"]: c.drawString(75, 65, f"Expiry date: {cert['expiry_date']}")
+    if cert["signatory"]:
+        c.drawString(w-270, 105, cert["signatory"])
+        c.setStrokeColor(colors.HexColor("#64748b")); c.line(w-270, 100, w-90, 100)
+        c.drawString(w-270, 82, "Authorized signatory")
+    c.drawImage(ImageReader(qr_io), w-145, 55, width=78, height=78, preserveAspectRatio=True, mask='auto')
+    c.setFont("Helvetica", 8); c.drawRightString(w-65, 43, "Scan to verify authenticity")
+    c.save(); buff.seek(0)
+    return send_file(buff, mimetype="application/pdf", as_attachment=True,
+                     download_name=f"{cert['cert_no']}.pdf")
+
+@app.route("/health")
+def health():
+    return {"status": "ok"}
+
+init_db()
+if __name__ == "__main__":
+    app.run(host="127.0.0.1", port=int(os.environ.get("PORT", 5000)), debug=False)
