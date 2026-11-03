@@ -1,44 +1,22 @@
-
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
+    <title>Record Verification</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Certificate Verification</title>
 </head>
 <body>
-    <h2>Ethiopian Public Health Institute</h2>
-    <h3>Certificate Verification Portal</h3>
+    <h2>Personal Record Lookup</h2>
 
-    {% if certificate %}
-        <h3>Certificate Record Found</h3>
+    <p><strong>Record found in demonstration database.</strong></p>
 
-        <p><strong>Certificate Number:</strong> {{ certificate['cert_no'] }}</p>
-        <p><strong>Recipient:</strong> {{ certificate['recipient'] }}</p>
-        <p><strong>Certificate Title:</strong> {{ certificate['title'] }}</p>
-        <p><strong>Organization:</strong> {{ certificate['organization'] }}</p>
-        <p><strong>Issue Date:</strong> {{ certificate['issue_date'] }}</p>
-        <p><strong>Expiry Date:</strong> {{ certificate['expiry_date'] or "N/A" }}</p>
-        <p><strong>Status:</strong> {{ certificate['status'] }}</p>
+    <p>Traveler ID: {{ cert['cert_no'] }}</p>
+    <p>Name: {{ cert['recipient'] }}</p>
+    <p>Record Date: {{ cert['issue_date'] }}</p>
 
-        <p>This record is displayed from the certificate database.</p>
-
-        <h3>Vaccination Details</h3>
-        {% if vaccinations %}
-            {% for vaccine in vaccinations %}
-                <p><strong>Vaccine:</strong> {{ vaccine['vaccine_type'] }}</p>
-                <p><strong>Manufacturer:</strong> {{ vaccine['manufacturer'] }}</p>
-                <p><strong>Batch Number:</strong> {{ vaccine['batch_no'] }}</p>
-                <p><strong>Vaccination Date:</strong> {{ vaccine['vaccination_date'] }}</p>
-                <hr>
-            {% endfor %}
-        {% else %}
-            <p>No vaccination details found.</p>
-        {% endif %}
-
-    {% else %}
-        <h3>Certificate Not Found</h3>
-    {% endif %}
+    <p>
+        This lookup confirms only that a record exists
+        in this website's database. It does not authenticate
+        vaccination or establish official validity.
+    </p>
 </body>
 </html>
-
