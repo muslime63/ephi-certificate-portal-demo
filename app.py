@@ -183,7 +183,7 @@ def certificate_pdf(token):
     c.setFont("Helvetica-Bold", 4.5)
     c.drawString(w - 58, 12, "TRAVELER ID QR")
 
-    # Clickable verification link
+    # Verification link
     verify_link = url_for(
         "verify",
         token=token,
@@ -196,7 +196,6 @@ def certificate_pdf(token):
 
     c.setFillColor(colors.HexColor("#174a6e"))
     c.setFont("Helvetica-Bold", 7)
-
     c.drawString(link_x, link_y, link_text)
 
     text_width = c.stringWidth(
@@ -205,7 +204,8 @@ def certificate_pdf(token):
         7
     )
 
-        c.linkURL(
+    # Clickable link - corrected indentation
+    c.linkURL(
         verify_link,
         (
             link_x,
@@ -216,9 +216,9 @@ def certificate_pdf(token):
         relative=0
     )
 
-    # Display verification URL
+    # Verification URL display
     c.setFillColor(colors.blue)
-    c.setFont("Helvetica", 5)
+    c.setFont("Helvetica", 4)
     c.drawString(18, 38, verify_link)
 
     # Footer
