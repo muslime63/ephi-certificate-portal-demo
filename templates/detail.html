@@ -33,10 +33,16 @@
             font-weight: bold;
         }
 
+        .actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
         .actions a {
             display: inline-block;
             padding: 12px 16px;
-            margin: 6px 4px;
             background: #174a6e;
             color: white;
             text-decoration: none;
@@ -60,6 +66,12 @@
             border-top: 1px solid #ddd;
             margin: 20px 0;
         }
+
+        .footer {
+            font-size: 13px;
+            color: #666;
+            margin-top: 20px;
+        }
     </style>
 </head>
 
@@ -81,9 +93,9 @@
         <p><strong>Date of Birth:</strong> {{ cert['dob'] or 'N/A' }}</p>
         <p><strong>Sex:</strong> {{ cert['sex'] or 'N/A' }}</p>
         <p><strong>Nationality:</strong> {{ cert['nationality'] or 'N/A' }}</p>
-        <p><strong>Organization:</strong> {{ cert['organization'] }}</p>
-        <p><strong>Record Date:</strong> {{ cert['issue_date'] }}</p>
-        <p><strong>Status:</strong> {{ cert['status'] }}</p>
+        <p><strong>Organization:</strong> {{ cert['organization'] or 'N/A' }}</p>
+        <p><strong>Record Date:</strong> {{ cert['issue_date'] or 'N/A' }}</p>
+        <p><strong>Status:</strong> {{ cert['status'] or 'N/A' }}</p>
 
         <hr>
 
@@ -118,11 +130,11 @@
                href="{{ url_for('verify', token=cert['token']) }}"
                target="_blank"
                rel="noopener">
-                Verify Personal Record
+                VERIFY PERSONAL RECORD
             </a>
 
             <a href="{{ url_for('certificate_pdf', token=cert['token']) }}">
-                Download Personal Record PDF
+                DOWNLOAD PERSONAL RECORD PDF
             </a>
 
         </div>
@@ -142,8 +154,9 @@
     </p>
 
     <p class="notice">
-        This is a demonstration personal record only.
-        It is not an official government or international travel certificate.
+        Demonstration record only. This page checks whether a matching
+        record exists in the demonstration database. It does not
+        authenticate vaccination or government authorization.
     </p>
 
 </div>
