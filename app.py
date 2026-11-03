@@ -1,4 +1,21 @@
-@app.route("/certificate/<token>.pdf")
+@app.route("/verify/<token>")
+def verify(token):
+    with db() as con:
+        cert = con.execute(
+            "SELECT * FROM certificates WHERE token=?",
+            (token,)
+        ).fetchone()
+
+    if not cert:
+        return """
+        <h2>Record Not Found</h2>
+        <p>No matching demonstration record was found.</p>
+        """, 404
+
+    return render_template(
+        "verify.html",
+        cert=cert
+    )@app.route("/certificate/<token>.pdf")
 def certificate_pdf(token):
     from reportlab.lib.units import cm
     from flask import url_for
