@@ -54,18 +54,6 @@ def certificate_pdf(token):
         _external=True
     )
 
-    # ---------------------------------
-    # PAGE 1: RECORD INFORMATION
-    # ---------------------------------
-
-    background()
-
-    page_title(
-        "VACCINATION RECORD COPY",
-        "DEMO / RECORD COPY - NOT AN OFFICIAL INTERNATIONAL CERTIFICATE"
-    )
-
-    heading("INFORMATION FOR RECORD HOLDERS", height - 140)
 
     text(
         45, height - 170,
