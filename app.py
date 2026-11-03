@@ -234,8 +234,11 @@ def admin():
         certificates=certificates
     )
 
+import random
 
-@app.route("/admin/issue", methods=["GET", "POST"])
+# Yeroo form irraa data guutan Traveler ID ofumaan uumuuf
+traveler_id = "EHIP" + "".join([str(random.randint(0, 9)) for _ in range(8)])
+
 @login_required
 def issue():
     if request.method == "GET":
