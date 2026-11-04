@@ -70,7 +70,7 @@ class AuditLog(db.Model):
     action = db.Column(db.String(255))
     timestamp = db.Column(db.DateTime, default=datetime.datetime.utcnow)
 
-# --- DATABASE SETUP & INITIAL ADMIN ---
+# --- DATABASE SETUP & HELPER FUNCTIONS ---
 
 def init_db():
     with app.app_context():
@@ -264,14 +264,5 @@ def download_pdf(traveler_id):
     return send_file(buffer, as_attachment=True, download_name=f"{record.traveler_id}_certificate.pdf", mimetype='application/pdf')
 
 if __name__ == '__main__':
-    with app.app_context():
-        db.create_all()
-        # Admin uumuu kan qabu yoo hin jirre qofa (server ka'uun walqabatee irra deebi'ee password akka hin jijjiirre godhameera)
-        if not Admin.query.filter_by(username='admin').first():
-            hashed_pw = generate_password_hash('admin123')
-            default_admin = Admin(username='admin', password_hash=hashed_pw)
-            db.session.add(default_admin)
-            db.session.commit()
-            print("Default admin created successfully.")
-            
+    init_db()
     app.run(debug=True)
