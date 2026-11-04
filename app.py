@@ -70,6 +70,20 @@ class AuditLog(db.Model):
     action = db.Column(db.String(255))
     timestamp = db.Column(db.DateTime, default=datetime.datetime.utcnow)
 
+# --- DATABASE SETUP & INITIAL ADMIN ---
+
+def init_db():
+    with app.app_context():
+        db.create_all()
+        if not Admin.query.filter_by(username='admin').first():
+            hashed_pw = generate_password_hash('admin123', method='scrypt')
+            default_admin = Admin(username='admin', password_hash=hashed_pw)
+            db.session.add(default_admin)
+            db.session.commit()
+
+# Execute initialization so WSGI servers (Gunicorn) run it on startup
+init_db()
+
 @login_manager.user_loader
 def load_user(user_id):
     return Admin.query.get(int(user_id))
@@ -253,16 +267,5 @@ def download_pdf(traveler_id):
     buffer.seek(0)
     return send_file(buffer, as_attachment=True, download_name=f"{record.traveler_id}_certificate.pdf", mimetype='application/pdf')
 
-# DB Setup & Initial Admin Creation
-def init_db():
-    with app.app_context():
-        db.create_all()
-        if not Admin.query.filter_by(username='admin').first():
-            hashed_pw = generate_password_hash('admin123', method='scrypt')
-            default_admin = Admin(username='admin', password_hash=hashed_pw)
-            db.session.add(default_admin)
-            db.session.commit()
-
 if __name__ == '__main__':
-    init_db()
     app.run(debug=True)
