@@ -12,7 +12,7 @@ from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'ephi-secret-key-change-in-production'
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'ephi-secret-key-change-in-production')
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///ephi_vaccine.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
@@ -80,17 +80,11 @@ def init_db():
             hashed_pw = generate_password_hash('admin123')
             default_admin = Admin(username='admin', password_hash=hashed_pw)
             db.session.add(default_admin)
-        else:
-            # Forcibly update password hash to standard pbkdf2
-            admin.password_hash = generate_password_hash('admin123')
-        db.session.commit()
-
-# Execute initialization at server startup
-init_db()
+            db.session.commit()
 
 @login_manager.user_loader
 def load_user(user_id):
-    return Admin.query.get(int(user_id))
+    return db.session.get(Admin, int(user_id))
 
 def generate_traveler_id():
     while True:
@@ -270,4 +264,14 @@ def download_pdf(traveler_id):
     return send_file(buffer, as_attachment=True, download_name=f"{record.traveler_id}_certificate.pdf", mimetype='application/pdf')
 
 if __name__ == '__main__':
+    with app.app_context():
+        db.create_all()
+        # Admin uumuu kan qabu yoo hin jirre qofa (server ka'uun walqabatee irra deebi'ee password akka hin jijjiirre godhameera)
+        if not Admin.query.filter_by(username='admin').first():
+            hashed_pw = generate_password_hash('admin123')
+            default_admin = Admin(username='admin', password_hash=hashed_pw)
+            db.session.add(default_admin)
+            db.session.commit()
+            print("Default admin created successfully.")
+            
     app.run(debug=True)
