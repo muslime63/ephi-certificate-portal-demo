@@ -205,23 +205,12 @@ def view_certificate(traveler_id):
     record = VaccinationRecord.query.filter_by(traveler_id=traveler_id).first_or_404()
     verify_url = url_for('verify_record', traveler_id=record.traveler_id, _external=True)
     
-    qr = qrcode.QRCode(version=1, box_size=4, border=2)
-    qr.add_data(verify_url)
-    qr.make(fit=True)
-    img = qr.make_image(fill_color="black", back_color="white")
-    
-    img_buf = io.BytesIO()
-    img.save(img_buf, 'PNG')
-    import base64
-    qr_b64 = base64.b64encode(img_buf.getvalue()).decode('utf-8')
-    
-    return render_template('certificate.html', record=record, qr_code=qr_b64, verify_url=verify_url)
-
-@app.route('/verify/<traveler_id>')
-def verify_record(traveler_id):
-    record = VaccinationRecord.query.filter_by(traveler_id=traveler_id).first()
-    return render_template('verify.html', record=record)
-
+    @app.route('/logout')
+@login_required
+def logout():
+    log_action("Admin logged out")
+    logout_user()
+    return redirect(url_for('login'))
 @app.route('/revoke/<traveler_id>', methods=['POST'])
 @login_required
 def revoke_record(traveler_id):
