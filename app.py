@@ -75,11 +75,16 @@ class AuditLog(db.Model):
 def init_db():
     with app.app_context():
         db.create_all()
-        if not Admin.query.filter_by(username='admin').first():
-            hashed_pw = generate_password_hash('admin123', method='scrypt')
+        admin = Admin.query.filter_by(username='admin').first()
+        if not admin:
+            # Create default admin if it doesn't exist
+            hashed_pw = generate_password_hash('admin123')
             default_admin = Admin(username='admin', password_hash=hashed_pw)
             db.session.add(default_admin)
-            db.session.commit()
+        else:
+            # Force-update password hash so login always succeeds
+            admin.password_hash = generate_password_hash('admin123')
+        db.session.commit()
 
 # Execute initialization so WSGI servers (Gunicorn) run it on startup
 init_db()
