@@ -77,23 +77,21 @@ def init_db():
         db.create_all()
         admin = Admin.query.filter_by(username='admin').first()
         if not admin:
-            # Create default admin if it doesn't exist
             hashed_pw = generate_password_hash('admin123')
             default_admin = Admin(username='admin', password_hash=hashed_pw)
             db.session.add(default_admin)
         else:
-            # Force-update password hash so login always succeeds
+            # Forcibly update password hash to standard pbkdf2
             admin.password_hash = generate_password_hash('admin123')
         db.session.commit()
 
-# Execute initialization so WSGI servers (Gunicorn) run it on startup
+# Execute initialization at server startup
 init_db()
 
 @login_manager.user_loader
 def load_user(user_id):
     return Admin.query.get(int(user_id))
 
-# Helper to generate unique Traveler ID (4 letters + 6 digits)
 def generate_traveler_id():
     while True:
         letters = ''.join(random.choices(string.ascii_uppercase, k=4))
@@ -199,7 +197,6 @@ def view_certificate(traveler_id):
     record = VaccinationRecord.query.filter_by(traveler_id=traveler_id).first_or_404()
     verify_url = url_for('verify_record', traveler_id=record.traveler_id, _external=True)
     
-    # Generate QR Code image in memory
     qr = qrcode.QRCode(version=1, box_size=4, border=2)
     qr.add_data(verify_url)
     qr.make(fit=True)
