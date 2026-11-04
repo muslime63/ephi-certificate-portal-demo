@@ -12,7 +12,7 @@ from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'ephi-secret-key-change-in-production'
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'ephi-secret-key-change-in-production')
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///ephi_vaccine.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
