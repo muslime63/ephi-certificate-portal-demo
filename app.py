@@ -4,14 +4,14 @@ import random
 import string
 import io
 import datetime
-import sqlite3
 
 from flask import (
     Flask, render_template, redirect, url_for,
-    request, flash, send_file, abort
+    request, flash, send_file, abort, make_response
 )
 
 from flask_sqlalchemy import SQLAlchemy
+
 from flask_login import (
     LoginManager, UserMixin, login_user,
     login_required, logout_user, current_user
@@ -21,9 +21,12 @@ from werkzeug.security import (
     generate_password_hash, check_password_hash
 )
 
+from sqlalchemy import or_
+
 import qrcode
 
 from reportlab.lib.pagesizes import letter
+from reportlab.lib.utils import ImageReader, simpleSplit
 from reportlab.pdfgen import canvas
 
 
@@ -45,16 +48,32 @@ if database_url:
         database_url = database_url.replace(
             'postgres://', 'postgresql://', 1
         )
+
     app.config['SQLALCHEMY_DATABASE_URI'] = database_url
+
 else:
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///ephi_vaccine.db'
+    app.config['SQLALCHEMY_DATABASE_URI'] = (
+        'sqlite:///ephi_vaccine.db'
+    )
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+    'pool_pre_ping': True
+}
+
 db = SQLAlchemy(app)
 
+
+# ==========================================
+# LOGIN MANAGER
+# ==========================================
+
 login_manager = LoginManager(app)
+
 login_manager.login_view = 'login'
+
+login_manager.login_message = 'Please login first.'
 
 
 # ==========================================
@@ -62,46 +81,112 @@ login_manager.login_view = 'login'
 # ==========================================
 
 class Admin(UserMixin, db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(50), unique=True, nullable=False)
-    password_hash = db.Column(db.String(255), nullable=False)
+
+    id = db.Column(
+        db.Integer,
+        primary_key=True
+    )
+
+    username = db.Column(
+        db.String(50),
+        unique=True,
+        nullable=False
+    )
+
+    password_hash = db.Column(
+        db.String(255),
+        nullable=False
+    )
 
 
 class VaccinationRecord(db.Model):
 
-    id = db.Column(db.Integer, primary_key=True)
-
-    traveler_id = db.Column(
-        db.String(10), unique=True, nullable=False
+    id = db.Column(
+        db.Integer,
+        primary_key=True
     )
 
-    full_name = db.Column(db.String(150), nullable=False)
-    dob = db.Column(db.String(20), nullable=False)
-    sex = db.Column(db.String(10), nullable=False)
-    nationality = db.Column(db.String(100), nullable=False)
+    traveler_id = db.Column(
+        db.String(10),
+        unique=True,
+        nullable=False
+    )
+
+    full_name = db.Column(
+        db.String(150),
+        nullable=False
+    )
+
+    dob = db.Column(
+        db.String(20),
+        nullable=False
+    )
+
+    sex = db.Column(
+        db.String(10),
+        nullable=False
+    )
+
+    nationality = db.Column(
+        db.String(100),
+        nullable=False
+    )
+
+    # YELLOW FEVER
 
     yf_manufacturer = db.Column(db.String(100))
     yf_batch = db.Column(db.String(50))
     yf_date = db.Column(db.String(20))
 
+    # ORAL POLIO
+
     opv_manufacturer = db.Column(db.String(100))
     opv_batch = db.Column(db.String(50))
     opv_date = db.Column(db.String(20))
+
+    # MENINGOCOCCAL A,C,Y,W135
 
     men_manufacturer = db.Column(db.String(100))
     men_batch = db.Column(db.String(50))
     men_date = db.Column(db.String(20))
 
+    # ORGANIZATION
+
     organization = db.Column(db.String(150))
-    supervising_clinician = db.Column(db.String(150))
-    signature_ref = db.Column(db.String(100))
-    authorized_by = db.Column(db.String(150))
 
-    status = db.Column(db.String(20), default='ACTIVE')
+    supervising_clinician = db.Column(
+        db.String(150)
+    )
 
-    revoked_reason = db.Column(db.Text, nullable=True)
-    revoked_at = db.Column(db.DateTime, nullable=True)
-    revoked_by = db.Column(db.String(50), nullable=True)
+    signature_ref = db.Column(
+        db.String(100)
+    )
+
+    authorized_by = db.Column(
+        db.String(150)
+    )
+
+    # STATUS
+
+    status = db.Column(
+        db.String(20),
+        default='ACTIVE'
+    )
+
+    revoked_reason = db.Column(
+        db.Text,
+        nullable=True
+    )
+
+    revoked_at = db.Column(
+        db.DateTime,
+        nullable=True
+    )
+
+    revoked_by = db.Column(
+        db.String(50),
+        nullable=True
+    )
 
     created_at = db.Column(
         db.DateTime,
@@ -111,10 +196,18 @@ class VaccinationRecord(db.Model):
 
 class AuditLog(db.Model):
 
-    id = db.Column(db.Integer, primary_key=True)
+    id = db.Column(
+        db.Integer,
+        primary_key=True
+    )
 
-    admin_username = db.Column(db.String(50))
-    action = db.Column(db.String(255))
+    admin_username = db.Column(
+        db.String(50)
+    )
+
+    action = db.Column(
+        db.String(255)
+    )
 
     timestamp = db.Column(
         db.DateTime,
@@ -123,7 +216,7 @@ class AuditLog(db.Model):
 
 
 # ==========================================
-# AUDIT LOG FUNCTION
+# AUDIT LOG
 # ==========================================
 
 def add_audit(action):
@@ -136,6 +229,7 @@ def add_audit(action):
         )
 
         db.session.add(log)
+
         db.session.commit()
 
 
@@ -149,38 +243,49 @@ def init_db():
 
         db.create_all()
 
-        admin_user = os.environ.get(
-            'ADMIN_USERNAME', 'admin'
+        admin_username = os.environ.get(
+            'ADMIN_USERNAME',
+            'admin'
         )
 
         admin_password = os.environ.get(
-            'ADMIN_PASSWORD', 'admin123'
+            'ADMIN_PASSWORD',
+            'admin123'
         )
 
         admin = Admin.query.filter_by(
-            username=admin_user
+            username=admin_username
         ).first()
 
         if not admin:
 
             admin = Admin(
-                username=admin_user,
+                username=admin_username,
+
                 password_hash=generate_password_hash(
                     admin_password
                 )
             )
 
             db.session.add(admin)
+
             db.session.commit()
 
 
 init_db()
 
 
+# ==========================================
+# USER LOADER
+# ==========================================
+
 @login_manager.user_loader
 def load_user(user_id):
 
-    return db.session.get(Admin, int(user_id))
+    return db.session.get(
+        Admin,
+        int(user_id)
+    )
 
 
 # ==========================================
@@ -193,11 +298,17 @@ def generate_traveler_id():
     while True:
 
         letters = ''.join(
-            random.choices(string.ascii_uppercase, k=4)
+            random.choices(
+                string.ascii_uppercase,
+                k=4
+            )
         )
 
         digits = ''.join(
-            random.choices(string.digits, k=6)
+            random.choices(
+                string.digits,
+                k=6
+            )
         )
 
         traveler_id = letters + digits
@@ -207,37 +318,60 @@ def generate_traveler_id():
         ).first()
 
         if not existing:
+
             return traveler_id
 
 
 # ==========================================
 # QR CODE GENERATOR
-# QR CONTAINS TRAVELER ID ONLY
+# TRAVELER ID ONLY
 # ==========================================
 
 def generate_qr(traveler_id):
 
     qr = qrcode.QRCode(
         version=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_M,
         box_size=8,
         border=3
     )
 
+    # QR contains Traveler ID ONLY
+
     qr.add_data(traveler_id)
+
     qr.make(fit=True)
 
     image = qr.make_image(
-        fill_color="black",
-        back_color="white"
+        fill_color='black',
+        back_color='white'
     )
 
     output = io.BytesIO()
 
-    image.save(output, format='PNG')
+    image.save(
+        output,
+        format='PNG'
+    )
 
     output.seek(0)
 
     return output
+
+
+# ==========================================
+# PDF TEXT HELPER
+# ==========================================
+
+def pdf_text(value):
+
+    if value is None:
+        return '-'
+
+    return str(value).encode(
+        'latin-1',
+        'replace'
+    ).decode('latin-1')
 
 
 # ==========================================
@@ -247,7 +381,9 @@ def generate_qr(traveler_id):
 @app.route('/')
 def home():
 
-    return redirect(url_for('login'))
+    return redirect(
+        url_for('login')
+    )
 
 
 # ==========================================
@@ -257,26 +393,42 @@ def home():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
 
+    if current_user.is_authenticated:
+
+        return redirect(
+            url_for('admin')
+        )
+
     if request.method == 'POST':
 
-        username = request.form.get('username', '').strip()
-        password = request.form.get('password', '')
+        username = request.form.get(
+            'username', ''
+        ).strip()
+
+        password = request.form.get(
+            'password', ''
+        )
 
         admin = Admin.query.filter_by(
             username=username
         ).first()
 
         if admin and check_password_hash(
-            admin.password_hash, password
+            admin.password_hash,
+            password
         ):
 
             login_user(admin)
 
             add_audit('Admin logged in')
 
-            return redirect(url_for('admin'))
+            return redirect(
+                url_for('admin')
+            )
 
-        flash('Username ykn password doggoraadha!')
+        flash(
+            'Username ykn password doggoraadha!'
+        )
 
     return render_template('login.html')
 
@@ -293,7 +445,9 @@ def logout():
 
     logout_user()
 
-    return redirect(url_for('login'))
+    return redirect(
+        url_for('login')
+    )
 
 
 # ==========================================
@@ -313,7 +467,7 @@ def admin():
     if search:
 
         query = query.filter(
-            db.or_(
+            or_(
                 VaccinationRecord.traveler_id.ilike(
                     f'%{search}%'
                 ),
@@ -333,15 +487,18 @@ def admin():
     total = len(all_records)
 
     active = sum(
-        1 for r in all_records if r.status == 'ACTIVE'
+        1 for r in all_records
+        if r.status == 'ACTIVE'
     )
 
     revoked = sum(
-        1 for r in all_records if r.status == 'REVOKED'
+        1 for r in all_records
+        if r.status == 'REVOKED'
     )
 
     archived = sum(
-        1 for r in all_records if r.status == 'ARCHIVED'
+        1 for r in all_records
+        if r.status == 'ARCHIVED'
     )
 
     return render_template(
@@ -358,11 +515,32 @@ def admin():
 # CREATE NEW VACCINATION RECORD
 # ==========================================
 
-@app.route('/admin/issue', methods=['GET', 'POST'])
+@app.route(
+    '/admin/issue',
+    methods=['GET', 'POST']
+)
 @login_required
 def issue():
 
     if request.method == 'POST':
+
+        full_name = request.form.get(
+            'full_name', ''
+        ).strip()
+
+        dob = request.form.get(
+            'dob', ''
+        ).strip()
+
+        if not full_name or not dob:
+
+            flash(
+                'Full Name fi Date of Birth guuti.'
+            )
+
+            return render_template(
+                'issue.html'
+            )
 
         traveler_id = generate_traveler_id()
 
@@ -370,37 +548,102 @@ def issue():
 
             traveler_id=traveler_id,
 
-            full_name=request.form.get('full_name', '').strip(),
-            dob=request.form.get('dob', ''),
-            sex=request.form.get('sex', ''),
-            nationality=request.form.get('nationality', ''),
+            full_name=full_name,
 
-            yf_manufacturer=request.form.get('yf_manufacturer'),
-            yf_batch=request.form.get('yf_batch'),
-            yf_date=request.form.get('yf_date'),
+            dob=dob,
 
-            opv_manufacturer=request.form.get('opv_manufacturer'),
-            opv_batch=request.form.get('opv_batch'),
-            opv_date=request.form.get('opv_date'),
+            sex=request.form.get(
+                'sex', ''
+            ).strip(),
 
-            men_manufacturer=request.form.get('men_manufacturer'),
-            men_batch=request.form.get('men_batch'),
-            men_date=request.form.get('men_date'),
+            nationality=request.form.get(
+                'nationality', ''
+            ).strip(),
 
-            organization=request.form.get('organization'),
-            supervising_clinician=request.form.get('supervising_clinician'),
-            signature_ref=request.form.get('signature_ref'),
-            authorized_by=request.form.get('authorized_by'),
+            # YELLOW FEVER
+
+            yf_manufacturer=request.form.get(
+                'yf_manufacturer', ''
+            ).strip(),
+
+            yf_batch=request.form.get(
+                'yf_batch', ''
+            ).strip(),
+
+            yf_date=request.form.get(
+                'yf_date', ''
+            ).strip(),
+
+            # ORAL POLIO
+
+            opv_manufacturer=request.form.get(
+                'opv_manufacturer', ''
+            ).strip(),
+
+            opv_batch=request.form.get(
+                'opv_batch', ''
+            ).strip(),
+
+            opv_date=request.form.get(
+                'opv_date', ''
+            ).strip(),
+
+            # MENINGOCOCCAL
+
+            men_manufacturer=request.form.get(
+                'men_manufacturer', ''
+            ).strip(),
+
+            men_batch=request.form.get(
+                'men_batch', ''
+            ).strip(),
+
+            men_date=request.form.get(
+                'men_date', ''
+            ).strip(),
+
+            # ORGANIZATION
+
+            organization=request.form.get(
+                'organization', ''
+            ).strip(),
+
+            supervising_clinician=request.form.get(
+                'supervising_clinician', ''
+            ).strip(),
+
+            signature_ref=request.form.get(
+                'signature_ref', ''
+            ).strip(),
+
+            authorized_by=request.form.get(
+                'authorized_by', ''
+            ).strip(),
 
             status='ACTIVE'
         )
 
-        if not record.full_name or not record.dob:
-            flash('Maqaa fi guyyaa dhalootaa guuti.')
-            return render_template('issue.html')
+        try:
 
-        db.session.add(record)
-        db.session.commit()
+            db.session.add(record)
+
+            db.session.commit()
+
+        except Exception:
+
+            db.session.rollback()
+
+            app.logger.exception(
+                'Error saving vaccination record'
+            )
+
+            flash(
+                'Record save hin taane. Irra deebi-i yaali.'
+            )
+
+            return render_template(
+                'issue.html'
+            )
 
         add_audit(
             f'Created vaccination record {traveler_id}'
@@ -417,11 +660,14 @@ def issue():
             )
         )
 
-    return render_template('issue.html')
+    return render_template(
+        'issue.html'
+    )
 
 
 # ==========================================
 # VIEW RECORD
+# ADMIN ONLY
 # ==========================================
 
 @app.route('/record/<traveler_id>')
@@ -439,7 +685,7 @@ def view_certificate(traveler_id):
 
 
 # ==========================================
-# PUBLIC CERTIFICATE VERIFICATION
+# PUBLIC ONLINE VERIFICATION
 # ==========================================
 
 @app.route('/verify/<traveler_id>')
@@ -449,18 +695,28 @@ def verify_record(traveler_id):
         traveler_id=traveler_id
     ).first()
 
-    return render_template(
-        'verify.html',
-        record=record,
-        traveler_id=traveler_id
+    response = make_response(
+        render_template(
+            'verify.html',
+            record=record,
+            traveler_id=traveler_id
+        )
     )
+
+    response.headers['Cache-Control'] = (
+        'no-store, no-cache, must-revalidate'
+    )
+
+    return response
 
 
 # ==========================================
 # PDF CERTIFICATE DOWNLOAD
+# ADMIN ONLY
 # ==========================================
 
 @app.route('/certificate/<traveler_id>.pdf')
+@login_required
 def download_pdf(traveler_id):
 
     record = VaccinationRecord.query.filter_by(
@@ -476,88 +732,321 @@ def download_pdf(traveler_id):
 
     width, height = letter
 
-    pdf.setTitle('Vaccination Record')
+    pdf.setTitle(
+        'Vaccination Record - ' + record.traveler_id
+    )
 
-    pdf.setFont('Helvetica-Bold', 18)
+    # HEADER
+
+    pdf.setFillColorRGB(
+        0.95, 0.80, 0.25
+    )
+
+    pdf.rect(
+        0,
+        height - 95,
+        width,
+        95,
+        fill=1,
+        stroke=0
+    )
+
+    pdf.setFillColorRGB(0, 0, 0)
+
+    pdf.setFont(
+        'Helvetica-Bold',
+        19
+    )
 
     pdf.drawCentredString(
         width / 2,
-        height - 45,
+        height - 42,
         'VACCINATION RECORD'
     )
 
-    pdf.setFont('Helvetica-Bold', 10)
+    pdf.setFont(
+        'Helvetica-Bold',
+        9
+    )
 
     pdf.drawCentredString(
         width / 2,
-        height - 65,
+        height - 63,
         'RECORD COPY - NOT AN INTERNATIONAL CERTIFICATE'
     )
 
-    pdf.setFont('Helvetica', 11)
+    y = height - 125
 
-    y = height - 110
+    # SECTION HELPER
 
-    details = [
+    def section(title):
 
-        ('Traveler ID', record.traveler_id),
-        ('Full Name', record.full_name),
-        ('Date of Birth', record.dob),
-        ('Sex', record.sex),
-        ('Nationality', record.nationality),
+        nonlocal y
 
-        ('Yellow Fever Manufacturer', record.yf_manufacturer),
-        ('Yellow Fever Batch', record.yf_batch),
-        ('Yellow Fever Date', record.yf_date),
-
-        ('Oral Polio Manufacturer', record.opv_manufacturer),
-        ('Oral Polio Batch', record.opv_batch),
-        ('Oral Polio Date', record.opv_date),
-
-        ('Meningococcal Manufacturer', record.men_manufacturer),
-        ('Meningococcal Batch', record.men_batch),
-        ('Meningococcal Date', record.men_date),
-
-        ('Organization', record.organization),
-        ('Supervising Clinician', record.supervising_clinician),
-        ('Authorized By', record.authorized_by),
-
-        ('Status', record.status)
-    ]
-
-    for label, value in details:
-
-        pdf.setFont('Helvetica-Bold', 10)
-
-        pdf.drawString(55, y, str(label) + ':')
-
-        pdf.setFont('Helvetica', 10)
-
-        pdf.drawString(
-            210,
-            y,
-            str(value or '-')
+        pdf.setFillColorRGB(
+            0.95, 0.85, 0.50
         )
 
-        y -= 19
+        pdf.rect(
+            45,
+            y - 5,
+            width - 90,
+            20,
+            fill=1,
+            stroke=0
+        )
 
-        if y < 140:
-            pdf.showPage()
-            y = height - 60
+        pdf.setFillColorRGB(0, 0, 0)
 
-    # QR CODE: TRAVELER ID ONLY
+        pdf.setFont(
+            'Helvetica-Bold',
+            11
+        )
 
-    qr_buffer = generate_qr(record.traveler_id)
+        pdf.drawString(
+            52,
+            y,
+            title
+        )
 
-    pdf.drawImage(
-        qr_buffer,
-        width - 145,
-        65,
-        width=85,
-        height=85
+        y -= 30
+
+    # DETAIL HELPER
+
+    def detail(label, value):
+
+        nonlocal y
+
+        pdf.setFont(
+            'Helvetica-Bold',
+            9
+        )
+
+        pdf.drawString(
+            55,
+            y,
+            pdf_text(label) + ':'
+        )
+
+        pdf.setFont(
+            'Helvetica',
+            9
+        )
+
+        value_text = pdf_text(value)
+
+        lines = simpleSplit(
+            value_text,
+            'Helvetica',
+            9,
+            320
+        )
+
+        for line in lines:
+
+            pdf.drawString(
+                225,
+                y,
+                line
+            )
+
+            y -= 13
+
+        y -= 5
+
+    # PERSONAL INFORMATION
+
+    section('PERSONAL INFORMATION')
+
+    detail(
+        'Traveler ID',
+        record.traveler_id
     )
 
-    # CLICKABLE VERIFY CERTIFICATE SENTENCE
+    detail(
+        'Full Name',
+        record.full_name
+    )
+
+    detail(
+        'Date of Birth',
+        record.dob
+    )
+
+    detail(
+        'Sex',
+        record.sex
+    )
+
+    detail(
+        'Nationality',
+        record.nationality
+    )
+
+    # YELLOW FEVER
+
+    section('YELLOW FEVER VACCINATION')
+
+    detail(
+        'Manufacturer',
+        record.yf_manufacturer
+    )
+
+    detail(
+        'Batch Number',
+        record.yf_batch
+    )
+
+    detail(
+        'Vaccination Date',
+        record.yf_date
+    )
+
+    # ORAL POLIO
+
+    section('ORAL POLIO VACCINATION')
+
+    detail(
+        'Manufacturer',
+        record.opv_manufacturer
+    )
+
+    detail(
+        'Batch Number',
+        record.opv_batch
+    )
+
+    detail(
+        'Vaccination Date',
+        record.opv_date
+    )
+
+    # MENINGOCOCCAL
+
+    section(
+        'MENINGOCOCCAL A, C, Y, W135 VACCINATION'
+    )
+
+    detail(
+        'Manufacturer',
+        record.men_manufacturer
+    )
+
+    detail(
+        'Batch Number',
+        record.men_batch
+    )
+
+    detail(
+        'Vaccination Date',
+        record.men_date
+    )
+
+    # ORGANIZATION
+
+    section('AUTHORIZATION INFORMATION')
+
+    detail(
+        'Organization',
+        record.organization
+    )
+
+    detail(
+        'Supervising Clinician',
+        record.supervising_clinician
+    )
+
+    detail(
+        'Clinician Signature Reference',
+        record.signature_ref
+    )
+
+    detail(
+        'Authorized By',
+        record.authorized_by
+    )
+
+    # STATUS
+
+    section('CERTIFICATE STATUS')
+
+    pdf.setFont(
+        'Helvetica-Bold',
+        12
+    )
+
+    if record.status == 'ACTIVE':
+
+        pdf.setFillColorRGB(
+            0, 0.55, 0.15
+        )
+
+    else:
+
+        pdf.setFillColorRGB(
+            0.8, 0, 0
+        )
+
+    pdf.drawString(
+        55,
+        y,
+        pdf_text(record.status)
+    )
+
+    pdf.setFillColorRGB(0, 0, 0)
+
+    y -= 22
+
+    if record.status == 'REVOKED':
+
+        detail(
+            'Revoked Reason',
+            record.revoked_reason
+        )
+
+        detail(
+            'Revoked By',
+            record.revoked_by
+        )
+
+        detail(
+            'Revoked At',
+            record.revoked_at
+        )
+
+    # QR CODE
+    # TRAVELER ID ONLY
+
+    qr_buffer = generate_qr(
+        record.traveler_id
+    )
+
+    qr_size = 75
+
+    qr_x = width - 125
+
+    qr_y = 45
+
+    pdf.drawImage(
+        ImageReader(qr_buffer),
+        qr_x,
+        qr_y,
+        width=qr_size,
+        height=qr_size
+    )
+
+    pdf.setFont(
+        'Helvetica-Bold',
+        8
+    )
+
+    pdf.drawCentredString(
+        qr_x + qr_size / 2,
+        qr_y - 12,
+        'TRAVELER ID QR'
+    )
+
+    # ONLINE VERIFICATION LINK
 
     verify_url = url_for(
         'verify_record',
@@ -565,28 +1054,61 @@ def download_pdf(traveler_id):
         _external=True
     )
 
-    pdf.setFont('Helvetica-Bold', 11)
+    verify_text = 'VERIFY RECORD ONLINE'
 
-    verify_text = 'Verify Certificate'
+    pdf.setFillColorRGB(
+        0, 0, 0.8
+    )
 
-    pdf.setFillColorRGB(0, 0, 0.7)
+    pdf.setFont(
+        'Helvetica-Bold',
+        10
+    )
 
-    pdf.drawString(55, 90, verify_text)
+    verify_x = 55
+
+    verify_y = 85
+
+    pdf.drawString(
+        verify_x,
+        verify_y,
+        verify_text
+    )
+
+    text_width = pdf.stringWidth(
+        verify_text,
+        'Helvetica-Bold',
+        10
+    )
 
     pdf.linkURL(
         verify_url,
-        (53, 85, 180, 105),
+        (
+            verify_x,
+            verify_y - 3,
+            verify_x + text_width,
+            verify_y + 12
+        ),
         relative=0
     )
 
     pdf.setFillColorRGB(0, 0, 0)
 
-    pdf.setFont('Helvetica', 8)
+    pdf.setFont(
+        'Helvetica',
+        8
+    )
 
     pdf.drawString(
         55,
-        70,
-        'Click Verify Certificate to check this record online.'
+        68,
+        'Scan QR for Traveler ID. Click the verification link to check status.'
+    )
+
+    pdf.drawString(
+        55,
+        53,
+        'Demonstration personal vaccination record only.'
     )
 
     pdf.save()
@@ -596,7 +1118,9 @@ def download_pdf(traveler_id):
     return send_file(
         buffer,
         as_attachment=True,
-        download_name=f'{record.traveler_id}.pdf',
+        download_name=(
+            f'{record.traveler_id}.pdf'
+        ),
         mimetype='application/pdf'
     )
 
@@ -606,13 +1130,16 @@ def download_pdf(traveler_id):
 # ==========================================
 
 @app.route('/qr/<traveler_id>')
+@login_required
 def qr_code(traveler_id):
 
     record = VaccinationRecord.query.filter_by(
         traveler_id=traveler_id
     ).first_or_404()
 
-    qr_buffer = generate_qr(record.traveler_id)
+    qr_buffer = generate_qr(
+        record.traveler_id
+    )
 
     return send_file(
         qr_buffer,
@@ -621,10 +1148,13 @@ def qr_code(traveler_id):
 
 
 # ==========================================
-# REVOKE CERTIFICATE
+# REVOKE RECORD
 # ==========================================
 
-@app.route('/revoke/<traveler_id>', methods=['GET', 'POST'])
+@app.route(
+    '/revoke/<traveler_id>',
+    methods=['GET', 'POST']
+)
 @login_required
 def revoke_certificate(traveler_id):
 
@@ -636,30 +1166,45 @@ def revoke_certificate(traveler_id):
 
         record.status = 'REVOKED'
 
-        record.revoked_reason = request.form.get(
-            'reason', 'Revoked by administrator'
+        record.revoked_reason = (
+            request.form.get(
+                'reason',
+                'Revoked by administrator'
+            ).strip()
+            or 'Revoked by administrator'
         )
 
-        record.revoked_at = datetime.datetime.utcnow()
+        record.revoked_at = (
+            datetime.datetime.utcnow()
+        )
 
-        record.revoked_by = current_user.username
+        record.revoked_by = (
+            current_user.username
+        )
 
         db.session.commit()
 
         add_audit(
-            f'Revoked certificate {traveler_id}'
+            f'Revoked record {traveler_id}'
         )
 
-        flash('Certificate revoked successfully.')
+        flash(
+            'Record status changed to REVOKED.'
+        )
 
-    return redirect(url_for('admin'))
+    return redirect(
+        url_for('admin')
+    )
 
 
 # ==========================================
-# DELETE CERTIFICATE
+# DELETE RECORD
 # ==========================================
 
-@app.route('/delete/<traveler_id>', methods=['GET', 'POST'])
+@app.route(
+    '/delete/<traveler_id>',
+    methods=['POST']
+)
 @login_required
 def delete_certificate(traveler_id):
 
@@ -672,17 +1217,21 @@ def delete_certificate(traveler_id):
     db.session.commit()
 
     add_audit(
-        f'Deleted certificate {traveler_id}'
+        f'Deleted record {traveler_id}'
     )
 
-    flash('Record deleted successfully.')
+    flash(
+        'Record deleted successfully.'
+    )
 
-    return redirect(url_for('admin'))
+    return redirect(
+        url_for('admin')
+    )
 
 
 # ==========================================
 # DATABASE BACKUP
-# SQLITE DATABASE ONLY
+# SQLITE ONLY
 # ==========================================
 
 @app.route('/database-backup')
@@ -692,23 +1241,30 @@ def database_backup():
     engine = db.engine
 
     if engine.dialect.name != 'sqlite':
+
         flash(
-            'Database backup for this database type needs a separate backup process.'
+            'PostgreSQL backup requires a separate backup process.'
         )
-        return redirect(url_for('admin'))
+
+        return redirect(
+            url_for('admin')
+        )
 
     database_path = engine.url.database
 
     if not database_path:
+
         abort(404)
 
     if not os.path.isabs(database_path):
+
         database_path = os.path.join(
             app.instance_path,
             database_path
         )
 
     if not os.path.exists(database_path):
+
         abort(404)
 
     return send_file(
@@ -750,6 +1306,16 @@ def health():
 
 
 # ==========================================
+# ERROR HANDLER
+# ==========================================
+
+@app.errorhandler(404)
+def page_not_found(error):
+
+    return 'Record or page not found.', 404
+
+
+# ==========================================
 # RUN APPLICATION
 # ==========================================
 
@@ -757,5 +1323,7 @@ if __name__ == '__main__':
 
     app.run(
         host='0.0.0.0',
-        port=int(os.environ.get('PORT', 5000))
+        port=int(
+            os.environ.get('PORT', 5000)
+        )
     )
