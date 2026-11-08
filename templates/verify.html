@@ -1,41 +1,231 @@
+
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
-    <title>Verify Certificate</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>Vaccination Record Verification</title>
+
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
+
 <body class="bg-light">
-    <div class="container mt-5 card p-4 shadow-sm text-center" style="max-width: 500px;">
-        <h3>EPHI Certificate Verification</h3>
+
+<div class="container mt-5 mb-5">
+
+    <div class="card shadow p-4 mx-auto"
+         style="max-width: 600px;">
+
+        <h3 class="text-center">
+            Vaccination Record Verification
+        </h3>
+
+        <p class="text-center text-muted">
+            Online Record Status
+        </p>
+
         <hr>
+
         {% if record %}
-            {% if record.status == 'ACTIVE' %}
-                <div class="alert alert-success">
-                    <h4>VALID CERTIFICATE</h4>
-                    <p>This certificate is authentic and active.</p>
-                </div>
-                <p><b>Traveler ID:</b> {{ record.traveler_id }}</p>
-                <p><b>Full Name:</b> {{ record.full_name }}</p>
-                <p><b>Nationality:</b> {{ record.nationality }}</p>
-            {% elif record.status == 'REVOKED' %}
-                <div class="alert alert-danger">
-                    <h4>REVOKED CERTIFICATE</h4>
-                    <p>This certificate has been revoked!</p>
-                    <p><b>Reason:</b> {{ record.revoked_reason }}</p>
-                </div>
-            {% else %}
-                <div class="alert alert-warning">
-                    <h4>ARCHIVED CERTIFICATE</h4>
-                    <p>This record is currently archived.</p>
-                </div>
-            {% endif %}
-        {% else %}
-            <div class="alert alert-warning">
-                <h4>INVALID RECORD</h4>
-                <p>No vaccination record matches this ID.</p>
+
+            <!-- STATUS -->
+
+            <div class="text-center mb-4">
+
+                {% if record.status == 'ACTIVE' %}
+
+                    <div class="alert alert-success">
+                        <h4>ACTIVE</h4>
+                        Record is currently marked ACTIVE.
+                    </div>
+
+                {% elif record.status == 'REVOKED' %}
+
+                    <div class="alert alert-danger">
+                        <h4>REVOKED</h4>
+                        This record has been revoked.
+                    </div>
+
+                {% else %}
+
+                    <div class="alert alert-warning">
+                        <h4>{{ record.status }}</h4>
+                        Record is not currently active.
+                    </div>
+
+                {% endif %}
+
             </div>
+
+            <!-- TRAVELER INFORMATION -->
+
+            <h5 class="text-primary">
+                Traveler Information
+            </h5>
+
+            <p>
+                <strong>Traveler ID:</strong>
+                {{ record.traveler_id }}
+            </p>
+
+            <p>
+                <strong>Full Name:</strong>
+                {{ record.full_name }}
+            </p>
+
+            <p>
+                <strong>Date of Birth:</strong>
+                {{ record.dob }}
+            </p>
+
+            <p>
+                <strong>Nationality:</strong>
+                {{ record.nationality }}
+            </p>
+
+            <hr>
+
+            <!-- YELLOW FEVER -->
+
+            <h5 class="text-primary">
+                Yellow Fever
+            </h5>
+
+            <p>
+                <strong>Manufacturer:</strong>
+                {{ record.yf_manufacturer or '-' }}
+            </p>
+
+            <p>
+                <strong>Batch Number:</strong>
+                {{ record.yf_batch or '-' }}
+            </p>
+
+            <p>
+                <strong>Vaccination Date:</strong>
+                {{ record.yf_date or '-' }}
+            </p>
+
+            <hr>
+
+            <!-- ORAL POLIO -->
+
+            <h5 class="text-primary">
+                Oral Polio Vaccine
+            </h5>
+
+            <p>
+                <strong>Manufacturer:</strong>
+                {{ record.opv_manufacturer or '-' }}
+            </p>
+
+            <p>
+                <strong>Batch Number:</strong>
+                {{ record.opv_batch or '-' }}
+            </p>
+
+            <p>
+                <strong>Vaccination Date:</strong>
+                {{ record.opv_date or '-' }}
+            </p>
+
+            <hr>
+
+            <!-- MENINGOCOCCAL -->
+
+            <h5 class="text-primary">
+                Meningococcal A, C, Y, W135
+            </h5>
+
+            <p>
+                <strong>Manufacturer:</strong>
+                {{ record.men_manufacturer or '-' }}
+            </p>
+
+            <p>
+                <strong>Batch Number:</strong>
+                {{ record.men_batch or '-' }}
+            </p>
+
+            <p>
+                <strong>Vaccination Date:</strong>
+                {{ record.men_date or '-' }}
+            </p>
+
+            <hr>
+
+            <!-- ORGANIZATION -->
+
+            <h5 class="text-primary">
+                Vaccination Center
+            </h5>
+
+            <p>
+                <strong>Organization:</strong>
+                {{ record.organization or '-' }}
+            </p>
+
+            <p>
+                <strong>Supervising Clinician:</strong>
+                {{ record.supervising_clinician or '-' }}
+            </p>
+
+            {% if record.status == 'REVOKED' %}
+
+                <hr>
+
+                <h5 class="text-danger">
+                    Revocation Information
+                </h5>
+
+                <p>
+                    <strong>Reason:</strong>
+                    {{ record.revoked_reason or '-' }}
+                </p>
+
+                <p>
+                    <strong>Revoked By:</strong>
+                    {{ record.revoked_by or '-' }}
+                </p>
+
+                <p>
+                    <strong>Revoked At:</strong>
+                    {{ record.revoked_at or '-' }}
+                </p>
+
+            {% endif %}
+
+        {% else %}
+
+            <div class="alert alert-danger text-center">
+                <h4>RECORD NOT FOUND</h4>
+
+                <p>
+                    No vaccination record matches this Traveler ID.
+                </p>
+
+                <strong>{{ traveler_id }}</strong>
+            </div>
+
         {% endif %}
+
+        <hr>
+
+        <div class="alert alert-warning text-center small">
+            Demonstration personal vaccination record only.
+            Not an international vaccination certificate.
+            Online status does not independently authenticate vaccination.
+        </div>
+
+        <p class="text-center text-muted small">
+            Online Verification System
+        </p>
+
     </div>
+
+</div>
+
 </body>
 </html>
