@@ -148,9 +148,9 @@ def admin():
     )
 
     return render_template(
-        'dashboard.html',
-        records=records,
-        total_records=total_records,
-        valid_records=valid_records,
-        displayed_records=total_records
-    )
+    'admin.html',
+    records=records,
+    total_records=total_records,
+    valid_records=valid_records,
+    displayed_records=total_records
+)
