@@ -1,0 +1,62 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Vaccination Record</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+
+<div class="container py-4">
+    <div class="card shadow p-4">
+        <h3 class="text-center mb-3">Vaccination Record</h3>
+
+        <div class="alert alert-warning text-center">
+            RECORD COPY – NOT AN INTERNATIONAL CERTIFICATE
+            <br>
+            Demonstration personal record only.
+        </div>
+
+        <h5>Traveler Information</h5>
+        <p><strong>Traveler ID:</strong> {{ record.traveler_id }}</p>
+        <p><strong>Full Name:</strong> {{ record.full_name }}</p>
+        <p><strong>Date of Birth:</strong> {{ record.dob }}</p>
+        <p><strong>Sex:</strong> {{ record.sex }}</p>
+        <p><strong>Nationality:</strong> {{ record.nationality }}</p>
+
+        <hr>
+
+        <h5>Vaccination Information</h5>
+        <p><strong>Vaccine:</strong> {{ record.vaccine_name }}</p>
+        <p><strong>Manufacturer:</strong> {{ record.manufacturer }}</p>
+        <p><strong>Batch Number:</strong> {{ record.batch_number }}</p>
+        <p><strong>Vaccination Date:</strong> {{ record.vaccination_date }}</p>
+
+        <hr>
+
+        <p><strong>Organization:</strong> {{ record.organization }}</p>
+        <p><strong>Supervising Clinician:</strong> {{ record.supervising_clinician }}</p>
+        <p><strong>Authorized By:</strong> {{ record.authorized_by }}</p>
+
+        <hr>
+
+        <p>
+            <strong>Status:</strong>
+            {{ record.status }}
+        </p>
+
+        <div class="text-center mt-3">
+            <a href="{{ url_for('verify_record', traveler_id=record.traveler_id) }}"
+               class="btn btn-success">Verify Record</a>
+
+            <a href="{{ url_for('admin') }}"
+               class="btn btn-secondary">Back to Dashboard</a>
+        </div>
+    </div>
+</div>
+
+</body>
+             </html>
+             
