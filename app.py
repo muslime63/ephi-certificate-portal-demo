@@ -29,14 +29,11 @@ from reportlab.pdfgen import canvas
 # ==========================================
 
 app = Flask(__name__)
-
 app.config["SECRET_KEY"] = os.environ.get(
-    "SECRET_KEY",
-    "change-this-secret-key"
+    "SECRET_KEY", "change-this-secret-key"
 )
 
 database_url = os.environ.get("DATABASE_URL")
-
 if database_url:
     if database_url.startswith("postgres://"):
         database_url = database_url.replace(
@@ -73,38 +70,30 @@ class Admin(UserMixin, db.Model):
 
 class VaccinationRecord(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-
-    traveler_id = db.Column(
-        db.String(10), unique=True, nullable=False
-    )
+    traveler_id = db.Column(db.String(10), unique=True, nullable=False)
     full_name = db.Column(db.String(150), nullable=False)
     dob = db.Column(db.String(20), nullable=False)
     sex = db.Column(db.String(10), nullable=False)
     nationality = db.Column(db.String(100), nullable=False)
 
-    # Yellow fever
     yf_manufacturer = db.Column(db.String(100))
     yf_batch = db.Column(db.String(50))
     yf_date = db.Column(db.String(20))
 
-    # Oral polio
     opv_manufacturer = db.Column(db.String(100))
     opv_batch = db.Column(db.String(50))
     opv_date = db.Column(db.String(20))
 
-    # Meningococcal A, C, Y, W135
     men_manufacturer = db.Column(db.String(100))
     men_batch = db.Column(db.String(50))
     men_date = db.Column(db.String(20))
 
-    # Organization and authorization
     organization = db.Column(db.String(150))
     supervising_clinician = db.Column(db.String(150))
     signature_ref = db.Column(db.String(100))
     authorized_by = db.Column(db.String(150))
 
-    # Record status
-    status = db.Column(db.String(20), default="ACTIVE")
+    status = db.Column(db.String(20), default="ACTIVE", nullable=False)
     revoked_reason = db.Column(db.Text, nullable=True)
     revoked_at = db.Column(db.DateTime, nullable=True)
     revoked_by = db.Column(db.String(50), nullable=True)
@@ -124,18 +113,20 @@ class AuditLog(db.Model):
 
 
 # ==========================================
-# AUDIT LOG
+# AUDIT LOG HELPER
 # ==========================================
 
 def add_audit(action):
     if current_user.is_authenticated:
-        db.session.add(
-            AuditLog(
+        try:
+            db.session.add(AuditLog(
                 admin_username=current_user.username,
                 action=action
-            )
-        )
-        db.session.commit()
+            ))
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            app.logger.exception("Could not save audit log")
 
 
 # ==========================================
@@ -178,18 +169,13 @@ def load_user(user_id):
 
 
 # ==========================================
-# TRAVELER ID GENERATOR
-# 4 LETTERS + 6 DIGITS
+# TRAVELER ID GENERATOR: 4 LETTERS + 6 DIGITS
 # ==========================================
 
 def generate_traveler_id():
     while True:
-        letters = "".join(
-            random.choices(string.ascii_uppercase, k=4)
-        )
-        digits = "".join(
-            random.choices(string.digits, k=6)
-        )
+        letters = "".join(random.choices(string.ascii_uppercase, k=4))
+        digits = "".join(random.choices(string.digits, k=6))
         traveler_id = letters + digits
 
         exists = VaccinationRecord.query.filter_by(
@@ -201,8 +187,7 @@ def generate_traveler_id():
 
 
 # ==========================================
-# QR CODE GENERATOR
-# QR CONTENT IS TRAVELER ID ONLY
+# QR CODE: TRAVELER ID ONLY
 # ==========================================
 
 def generate_qr(traveler_id):
@@ -215,27 +200,17 @@ def generate_qr(traveler_id):
     qr.add_data(traveler_id)
     qr.make(fit=True)
 
-    image = qr.make_image(
-        fill_color="black",
-        back_color="white"
-    )
-
+    image = qr.make_image(fill_color="black", back_color="white")
     output = io.BytesIO()
     image.save(output, format="PNG")
     output.seek(0)
     return output
 
 
-# ==========================================
-# PDF TEXT HELPER
-# ==========================================
-
 def pdf_text(value):
     if value is None or str(value).strip() == "":
         return "-"
-    return str(value).encode(
-        "latin-1", "replace"
-    ).decode("latin-1")
+    return str(value).encode("latin-1", "replace").decode("latin-1")
 
 
 # ==========================================
@@ -260,9 +235,7 @@ def login():
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
 
-        admin_user = Admin.query.filter_by(
-            username=username
-        ).first()
+        admin_user = Admin.query.filter_by(username=username).first()
 
         if admin_user and check_password_hash(
             admin_user.password_hash, password
@@ -290,23 +263,57 @@ def logout():
 
 # ==========================================
 # ADMIN DASHBOARD
-==========================================
+# ==========================================
 
-ADMIN AUDIT LOGS
+@app.route("/admin")
+@login_required
+def admin():
+    search = request.args.get("search", "").strip()
+    query = VaccinationRecord.query
 
-==========================================
+    if search:
+        query = query.filter(
+            or_(
+                VaccinationRecord.traveler_id.ilike(f"%{search}%"),
+                VaccinationRecord.full_name.ilike(f"%{search}%")
+            )
+        )
+
+    records = query.order_by(
+        VaccinationRecord.created_at.desc()
+    ).all()
+
+    all_records = VaccinationRecord.query.all()
+    total = len(all_records)
+    active = sum(1 for record in all_records if record.status == "ACTIVE")
+    revoked = sum(1 for record in all_records if record.status == "REVOKED")
+    archived = sum(1 for record in all_records if record.status == "ARCHIVED")
+
+    return render_template(
+        "admin.html",
+        records=records,
+        total=total,
+        active=active,
+        revoked=revoked,
+        archived=archived
+    )
+
+
+# ==========================================
+# ADMIN AUDIT LOGS
+# ==========================================
 
 @app.route("/admin/audit-logs")
 @login_required
 def audit_logs():
-logs = AuditLog.query.order_by(
-AuditLog.timestamp.desc()
-).all()
+    logs = AuditLog.query.order_by(
+        AuditLog.timestamp.desc()
+    ).all()
 
-return render_template(
-    "audit_logs.html",
-    logs=logs
-)
+    return render_template("audit_logs.html", logs=logs)
+
+
+# ==========================================
 # CREATE NEW VACCINATION RECORD
 # ==========================================
 
@@ -327,19 +334,15 @@ def issue():
             dob=dob,
             sex=request.form.get("sex", "").strip(),
             nationality=request.form.get("nationality", "").strip(),
-
             yf_manufacturer=request.form.get("yf_manufacturer", "").strip(),
             yf_batch=request.form.get("yf_batch", "").strip(),
             yf_date=request.form.get("yf_date", "").strip(),
-
             opv_manufacturer=request.form.get("opv_manufacturer", "").strip(),
             opv_batch=request.form.get("opv_batch", "").strip(),
             opv_date=request.form.get("opv_date", "").strip(),
-
             men_manufacturer=request.form.get("men_manufacturer", "").strip(),
             men_batch=request.form.get("men_batch", "").strip(),
             men_date=request.form.get("men_date", "").strip(),
-
             organization=request.form.get("organization", "").strip(),
             supervising_clinician=request.form.get(
                 "supervising_clinician", ""
@@ -358,19 +361,12 @@ def issue():
             flash("Record save hin taane. Irra deebi'i yaali.")
             return render_template("issue.html")
 
-        add_audit(
-            f"Created vaccination record {record.traveler_id}"
-        )
+        add_audit(f"Created vaccination record {record.traveler_id}")
+        flash(f"Record created. Traveler ID: {record.traveler_id}")
 
-        flash(
-            f"Record created. Traveler ID: {record.traveler_id}"
-        )
-        return redirect(
-            url_for(
-                "view_certificate",
-                traveler_id=record.traveler_id
-            )
-        )
+        return redirect(url_for(
+            "view_certificate", traveler_id=record.traveler_id
+        ))
 
     return render_template("issue.html")
 
@@ -386,10 +382,7 @@ def view_certificate(traveler_id):
         traveler_id=traveler_id
     ).first_or_404()
 
-    return render_template(
-        "certificate.html",
-        record=record
-    )
+    return render_template("certificate.html", record=record)
 
 
 # ==========================================
@@ -402,21 +395,17 @@ def verify_record(traveler_id):
         traveler_id=traveler_id
     ).first()
 
-    response = make_response(
-        render_template(
-            "verify.html",
-            record=record,
-            traveler_id=traveler_id
-        )
-    )
-    response.headers["Cache-Control"] = (
-        "no-store, no-cache, must-revalidate"
-    )
+    response = make_response(render_template(
+        "verify.html",
+        record=record,
+        traveler_id=traveler_id
+    ))
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
     return response
 
 
 # ==========================================
-# PDF CERTIFICATE DOWNLOAD - ADMIN ONLY
+# PDF RECORD DOWNLOAD - ADMIN ONLY
 # ==========================================
 
 @app.route("/certificate/<traveler_id>.pdf")
@@ -430,31 +419,27 @@ def download_pdf(traveler_id):
     pdf = canvas.Canvas(buffer, pagesize=letter)
     width, height = letter
 
-    pdf.setTitle(
-        "Vaccination Record - " + record.traveler_id
-    )
+    pdf.setTitle("Personal Vaccination Record - " + record.traveler_id)
 
     # Header
     pdf.setFillColorRGB(0.95, 0.80, 0.25)
     pdf.rect(0, height - 95, width, 95, fill=1, stroke=0)
-
     pdf.setFillColorRGB(0, 0, 0)
     pdf.setFont("Helvetica-Bold", 19)
-    pdf.drawCentredString(
-        width / 2, height - 42, "VACCINATION RECORD"
-    )
-
+    pdf.drawCentredString(width / 2, height - 42, "VACCINATION RECORD")
     pdf.setFont("Helvetica-Bold", 9)
     pdf.drawCentredString(
-        width / 2,
-        height - 63,
-        "RECORD COPY - NOT AN INTERNATIONAL CERTIFICATE"
+        width / 2, height - 63,
+        "DEMONSTRATION PERSONAL RECORD - NOT AN OFFICIAL CERTIFICATE"
     )
 
     y = height - 125
 
     def section(title):
         nonlocal y
+        if y < 120:
+            pdf.showPage()
+            y = height - 55
         pdf.setFillColorRGB(0.95, 0.85, 0.50)
         pdf.rect(45, y - 5, width - 90, 20, fill=1, stroke=0)
         pdf.setFillColorRGB(0, 0, 0)
@@ -464,21 +449,19 @@ def download_pdf(traveler_id):
 
     def detail(label, value):
         nonlocal y
+        lines = simpleSplit(pdf_text(value), "Helvetica", 9, 320)
+        needed = max(1, len(lines)) * 13 + 5
+        if y - needed < 90:
+            pdf.showPage()
+            y = height - 55
         pdf.setFont("Helvetica-Bold", 9)
         pdf.drawString(55, y, pdf_text(label) + ":")
-
         pdf.setFont("Helvetica", 9)
-        lines = simpleSplit(
-            pdf_text(value), "Helvetica", 9, 320
-        )
-
         for line in lines:
             pdf.drawString(225, y, line)
             y -= 13
-
         y -= 5
 
-    # Personal information
     section("PERSONAL INFORMATION")
     detail("Traveler ID", record.traveler_id)
     detail("Full Name", record.full_name)
@@ -486,41 +469,40 @@ def download_pdf(traveler_id):
     detail("Sex", record.sex)
     detail("Nationality", record.nationality)
 
-    # Yellow fever
     section("YELLOW FEVER VACCINATION")
     detail("Manufacturer", record.yf_manufacturer)
     detail("Batch Number", record.yf_batch)
     detail("Vaccination Date", record.yf_date)
 
-    # Oral polio
     section("ORAL POLIO VACCINATION")
     detail("Manufacturer", record.opv_manufacturer)
     detail("Batch Number", record.opv_batch)
     detail("Vaccination Date", record.opv_date)
 
-    # Meningococcal
-    section("MENINGOCOCCAL A, C, Y, W135 VACCINATION")
+    section("MENINGOCOCCAL ACYW135 VACCINATION")
     detail("Manufacturer", record.men_manufacturer)
     detail("Batch Number", record.men_batch)
     detail("Vaccination Date", record.men_date)
 
-    # Authorization
-    section("AUTHORIZATION INFORMATION")
-    detail("Organization", record.organization)
+    section("CLINIC INFORMATION")
+    detail("Clinic / Vaccination Center", record.organization)
     detail("Supervising Clinician", record.supervising_clinician)
     detail("Clinician Signature Reference", record.signature_ref)
     detail("Authorized By", record.authorized_by)
 
-    # Status
     section("RECORD STATUS")
     pdf.setFont("Helvetica-Bold", 12)
-
     if record.status == "ACTIVE":
         pdf.setFillColorRGB(0, 0.55, 0.15)
-    else:
+        status_label = "VALID (ACTIVE)"
+    elif record.status == "REVOKED":
         pdf.setFillColorRGB(0.8, 0, 0)
+        status_label = "REVOKED"
+    else:
+        pdf.setFillColorRGB(0, 0, 0)
+        status_label = pdf_text(record.status)
 
-    pdf.drawString(55, y, pdf_text(record.status))
+    pdf.drawString(55, y, status_label)
     pdf.setFillColorRGB(0, 0, 0)
     y -= 22
 
@@ -534,91 +516,33 @@ def download_pdf(traveler_id):
     qr_size = 75
     qr_x = width - 125
     qr_y = 45
-
     pdf.drawImage(
-        ImageReader(qr_buffer),
-        qr_x,
-        qr_y,
-        width=qr_size,
-        height=qr_size
+        ImageReader(qr_buffer), qr_x, qr_y,
+        width=qr_size, height=qr_size
     )
-
     pdf.setFont("Helvetica-Bold", 8)
-    pdf.drawCentredString(
-        qr_x + qr_size / 2,
-        qr_y - 12,
-        "TRAVELER ID QR"
-    )
+    pdf.drawCentredString(qr_x + qr_size / 2, qr_y - 12, "TRAVELER ID QR")
 
-    # ======================================
-    # ONLINE VERIFICATION LINK - FIXED
-    # ======================================
-
+    # Clickable verification text; do not print the long URL
     verify_url = (
         "https://ephi-certificate-portal-demo-1.onrender.com"
         f"/verify/{record.traveler_id}"
     )
-
     verify_text = "VERIFY RECORD ONLINE"
-    verify_x = 55
-    verify_y = 85
-
+    verify_x, verify_y = 55, 75
     pdf.setFillColorRGB(0, 0, 0.8)
     pdf.setFont("Helvetica-Bold", 10)
     pdf.drawString(verify_x, verify_y, verify_text)
-
-    text_width = pdf.stringWidth(
-        verify_text, "Helvetica-Bold", 10
-    )
-
-    # Clickable heading
+    text_width = pdf.stringWidth(verify_text, "Helvetica-Bold", 10)
     pdf.linkURL(
         verify_url,
-        (
-            verify_x,
-            verify_y - 3,
-            verify_x + text_width,
-            verify_y + 12
-        ),
+        (verify_x, verify_y - 3, verify_x + text_width, verify_y + 12),
         relative=0
     )
 
-    # Print the full URL; each printed line is clickable
-    pdf.setFillColorRGB(0, 0, 0.8)
-    pdf.setFont("Helvetica", 7)
-
-    url_lines = simpleSplit(
-        verify_url, "Helvetica", 7, 430
-    )
-
-    url_y = 68
-
-    for line in url_lines:
-        pdf.drawString(55, url_y, line)
-
-        line_width = pdf.stringWidth(
-            line, "Helvetica", 7
-        )
-
-        pdf.linkURL(
-            verify_url,
-            (
-                55,
-                url_y - 2,
-                55 + line_width,
-                url_y + 9
-            ),
-            relative=0
-        )
-        url_y -= 10
-
     pdf.setFillColorRGB(0, 0, 0)
     pdf.setFont("Helvetica", 8)
-    pdf.drawString(
-        55,
-        40,
-        "Demonstration personal vaccination record only."
-    )
+    pdf.drawString(55, 40, "Demonstration personal vaccination record only.")
 
     pdf.save()
     buffer.seek(0)
@@ -661,7 +585,6 @@ def health():
 
 # ==========================================
 # LOCAL DEVELOPMENT
-# Render uses its own start command
 # ==========================================
 
 if __name__ == "__main__":
