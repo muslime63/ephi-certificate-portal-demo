@@ -900,3 +900,20 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=port
     )
+@app.route("/health")
+def health():
+    return {
+        "status": "ok",
+        "application": "Vaccination Record Demo"
+    }, 200
+
+
+# ==========================================
+# RUN APPLICATION
+# ==========================================
+
+if __name__ == "__main__":
+    app.run(
+        host="0.0.0.0",
+        port=int(os.environ.get("PORT", 10000))
+    )
