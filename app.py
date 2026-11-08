@@ -135,22 +135,38 @@ def logout():
     return redirect(url_for('login'))
 
 
+
 @app.route('/admin')
 @login_required
 def admin():
-    records = VaccinationRecord.query.order_by(
+    search = request.args.get('search', '').strip()
+
+    query = VaccinationRecord.query
+
+    if search:
+        query = query.filter(
+            db.or_(
+                VaccinationRecord.traveler_id.ilike(f'%{search}%'),
+                VaccinationRecord.full_name.ilike(f'%{search}%')
+            )
+        )
+
+    records = query.order_by(
         VaccinationRecord.created_at.desc()
     ).all()
 
-    total_records = len(records)
-    valid_records = sum(
-        1 for record in records if record.status == 'ACTIVE'
-    )
+    all_records = VaccinationRecord.query.all()
+
+    total = len(all_records)
+    active = sum(1 for r in all_records if r.status == 'ACTIVE')
+    revoked = sum(1 for r in all_records if r.status == 'REVOKED')
+    archived = sum(1 for r in all_records if r.status == 'ARCHIVED')
 
     return render_template(
-    'admin.html',
-    records=records,
-    total_records=total_records,
-    valid_records=valid_records,
-    displayed_records=total_records
-)
+        'admin.html',
+        records=records,
+        total=total,
+        active=active,
+        revoked=revoked,
+        archived=archived
+    )
