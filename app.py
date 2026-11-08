@@ -104,3 +104,53 @@ def generate_traveler_id():
         tid = f"{letters}{digits}"
         if not VaccinationRecord.query.filter_by(traveler_id=tid).first():
             return tid
+# --- ADMIN LOGIN ---
+
+@app.route('/')
+def home():
+    return redirect(url_for('login'))
+
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+
+        admin = Admin.query.filter_by(username=username).first()
+
+        if admin and check_password_hash(admin.password_hash, password):
+            login_user(admin)
+            return redirect(url_for('admin'))
+
+        flash('Username ykn password doggoraadha!')
+
+    return render_template('login.html')
+
+
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    return redirect(url_for('login'))
+
+
+@app.route('/admin')
+@login_required
+def admin():
+    records = VaccinationRecord.query.order_by(
+        VaccinationRecord.created_at.desc()
+    ).all()
+
+    total_records = len(records)
+    valid_records = sum(
+        1 for record in records if record.status == 'ACTIVE'
+    )
+
+    return render_template(
+        'dashboard.html',
+        records=records,
+        total_records=total_records,
+        valid_records=valid_records,
+        displayed_records=total_records
+    )
