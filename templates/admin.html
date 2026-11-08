@@ -1,39 +1,72 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>EPHI Admin Dashboard</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
+
 <body class="bg-light">
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-        <div class="container-fluid">
-            <a class="navbar-brand" href="#">EPHI Portal</a>
-            <div class="d-flex">
-                <a href="{{ url_for('audit_logs') }}" class="btn btn-outline-light btn-sm me-2">Audit Logs</a>
-                <a href="{{ url_for('logout') }}" class="btn btn-danger btn-sm">Logout</a>
-            </div>
-        </div>
-    </nav>
 
-    <div class="container mt-4">
-        <h2>Administration Dashboard</h2>
-        <div class="row text-white my-3">
-            <div class="col-md-3"><div class="p-3 bg-primary rounded">Total: {{ total }}</div></div>
-            <div class="col-md-3"><div class="p-3 bg-success rounded">Active: {{ active }}</div></div>
-            <div class="col-md-3"><div class="p-3 bg-warning rounded">Revoked: {{ revoked }}</div></div>
-            <div class="col-md-3"><div class="p-3 bg-secondary rounded">Archived: {{ archived }}</div></div>
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="{{ url_for('admin') }}">EPHI Portal</a>
+        <div>
+            <a href="{{ url_for('audit_logs') }}" class="btn btn-outline-light btn-sm me-2">Audit Logs</a>
+            <a href="{{ url_for('logout') }}" class="btn btn-danger btn-sm">Logout</a>
         </div>
+    </div>
+</nav>
 
-        <div class="d-flex justify-content-between my-3">
-            <a href="{{ url_for('issue_record') }}" class="btn btn-success">+ Issue New Record</a>
-            <form class="d-flex" method="GET">
-                <input class="form-control me-2" type="search" name="search" placeholder="Search ID or Name">
-                <button class="btn btn-outline-success" type="submit">Search</button>
-            </form>
+<div class="container mt-4">
+
+    <h2>Administration Dashboard</h2>
+    <p class="text-muted">RECORD COPY - NOT AN INTERNATIONAL CERTIFICATE</p>
+
+    {% with messages = get_flashed_messages() %}
+        {% for message in messages %}
+            <div class="alert alert-info">{{ message }}</div>
+        {% endfor %}
+    {% endwith %}
+
+    <div class="row text-white my-3">
+        <div class="col-md-3 mb-2">
+            <div class="p-3 bg-primary rounded">Total: {{ total }}</div>
         </div>
+        <div class="col-md-3 mb-2">
+            <div class="p-3 bg-success rounded">Active: {{ active }}</div>
+        </div>
+        <div class="col-md-3 mb-2">
+            <div class="p-3 bg-warning rounded">Revoked: {{ revoked }}</div>
+        </div>
+        <div class="col-md-3 mb-2">
+            <div class="p-3 bg-secondary rounded">Archived: {{ archived }}</div>
+        </div>
+    </div>
 
-        <table class="table table-striped bg-white shadow-sm rounded">
+    <div class="d-flex justify-content-between my-3 flex-wrap gap-2">
+
+        <a href="{{ url_for('issue') }}" class="btn btn-success">
+            + Issue New Record
+        </a>
+
+        <form class="d-flex" method="GET" action="{{ url_for('admin') }}">
+            <input class="form-control me-2"
+                   type="search"
+                   name="search"
+                   placeholder="Search ID or Name">
+            <button class="btn btn-outline-success" type="submit">
+                Search
+            </button>
+        </form>
+
+    </div>
+
+    <div class="table-responsive bg-white shadow-sm rounded">
+        <table class="table table-striped mb-0">
+
             <thead>
                 <tr>
                     <th>Traveler ID</th>
@@ -43,26 +76,69 @@
                     <th>Actions</th>
                 </tr>
             </thead>
+
             <tbody>
+
                 {% for r in records %}
                 <tr>
                     <td>{{ r.traveler_id }}</td>
                     <td>{{ r.full_name }}</td>
                     <td>{{ r.nationality }}</td>
-                    <td><span class="badge bg-{{ 'success' if r.status=='ACTIVE' else ('danger' if r.status=='REVOKED' else 'secondary') }}">{{ r.status }}</span></td>
+
                     <td>
-                        <a href="{{ url_for('view_certificate', traveler_id=r.traveler_id) }}" class="btn btn-sm btn-info">View</a>
-                        <a href="{{ url_for('download_pdf', traveler_id=r.traveler_id) }}" class="btn btn-sm btn-dark">PDF</a>
                         {% if r.status == 'ACTIVE' %}
-                        <a href="{{ url_for('archive_record', traveler_id=r.traveler_id) }}" class="btn btn-sm btn-secondary">Archive</a>
+                            <span class="badge bg-success">ACTIVE</span>
                         {% elif r.status == 'REVOKED' %}
-                        <a href="{{ url_for('restore_record', traveler_id=r.traveler_id) }}" class="btn btn-sm btn-success">Restore</a>
+                            <span class="badge bg-danger">REVOKED</span>
+                        {% else %}
+                            <span class="badge bg-secondary">{{ r.status }}</span>
                         {% endif %}
+                    </td>
+
+                    <td>
+                        <a href="{{ url_for('view_certificate', traveler_id=r.traveler_id) }}"
+                           class="btn btn-sm btn-info">View</a>
+
+                        <a href="{{ url_for('download_pdf', traveler_id=r.traveler_id) }}"
+                           class="btn btn-sm btn-dark">PDF</a>
+
+                        {% if r.status == 'ACTIVE' %}
+                        <form method="POST"
+                              action="{{ url_for('revoke_certificate', traveler_id=r.traveler_id) }}"
+                              class="d-inline">
+                            <button type="submit"
+                                    class="btn btn-sm btn-warning"
+                                    onclick="return confirm('Revoke this record?')">
+                                Revoke
+                            </button>
+                        </form>
+                        {% endif %}
+
+                        <form method="POST"
+                              action="{{ url_for('delete_certificate', traveler_id=r.traveler_id) }}"
+                              class="d-inline">
+                            <button type="submit"
+                                    class="btn btn-sm btn-danger"
+                                    onclick="return confirm('Delete this record permanently?')">
+                                Delete
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+
+                {% else %}
+                <tr>
+                    <td colspan="5" class="text-center py-4">
+                        No vaccination records found.
                     </td>
                 </tr>
                 {% endfor %}
+
             </tbody>
         </table>
     </div>
+
+</div>
+
 </body>
 </html>
