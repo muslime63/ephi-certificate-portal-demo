@@ -290,44 +290,23 @@ def logout():
 
 # ==========================================
 # ADMIN DASHBOARD
-# ==========================================
+==========================================
 
-@app.route("/admin")
+ADMIN AUDIT LOGS
+
+==========================================
+
+@app.route("/admin/audit-logs")
 @login_required
-def admin():
-    search = request.args.get("search", "").strip()
-    query = VaccinationRecord.query
+def audit_logs():
+logs = AuditLog.query.order_by(
+AuditLog.timestamp.desc()
+).all()
 
-    if search:
-        query = query.filter(
-            or_(
-                VaccinationRecord.traveler_id.ilike(f"%{search}%"),
-                VaccinationRecord.full_name.ilike(f"%{search}%")
-            )
-        )
-
-    records = query.order_by(
-        VaccinationRecord.created_at.desc()
-    ).all()
-
-    all_records = VaccinationRecord.query.all()
-
-    total = len(all_records)
-    active = sum(1 for r in all_records if r.status == "ACTIVE")
-    revoked = sum(1 for r in all_records if r.status == "REVOKED")
-    archived = sum(1 for r in all_records if r.status == "ARCHIVED")
-
-    return render_template(
-        "admin.html",
-        records=records,
-        total=total,
-        active=active,
-        revoked=revoked,
-        archived=archived
-    )
-
-
-# ==========================================
+return render_template(
+    "audit_logs.html",
+    logs=logs
+)
 # CREATE NEW VACCINATION RECORD
 # ==========================================
 
